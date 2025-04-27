@@ -5,7 +5,7 @@ cases at the graphical user interface (GUI) level. It understands explicit natur
 verifications), performs corresponding actions using the mouse and keyboard, locates the required UI elements on the screen (if needed), and
 verifies whether actual results correspond to the expected ones using computer vision capabilities.
 
-[![Build Status](https://github.com/partarstu/ui_test_java/actions/workflows/package.yml/badge.svg)](https://github.com/partarstu/ui_test_java/actions/workflows/package.yml)
+[![Package Project](https://github.com/partarstu/ui-test-automation-agent/actions/workflows/package.yml/badge.svg)](https://github.com/partarstu/ui-test-automation-agent/actions/workflows/package.yml)
 
 ## Key Features
 
