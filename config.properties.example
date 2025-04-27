@@ -1,0 +1,65 @@
+# Basic agent configuration
+unattended.mode=false
+port=7070
+test.mode=false
+
+#-----------------------------------------------
+# RAG config
+# Currently only 'chroma' is supported
+vector.db.provider=chroma
+vector.db.url=http://localhost:8000
+retriever.top.n=3
+
+#-----------------------------------------------
+# Model Configuration
+model.provider=google
+instruction.model.name=gemini-2.0-flash
+vision.model.name=gemini-2.5-pro-exp-03-25
+model.max.output.tokens=5000
+model.temperature=0.0
+model.top.p=1.0
+# Max API request retries
+model.max.retries=10
+
+#-----------------------------------------------
+# Google API Configuration
+# Studio AI or Vertex AI
+google.api.provider=studio_ai
+google.api.token=YOUR_GOOGLE_AI_TOKEN_HERE
+google.project=YOUR_GOOGLE_PROJECT_ID
+google.location=YOUR_GOOGLE_PROJECT_LOCATION
+
+#-----------------------------------------------
+# Azure OpenAI API Configuration
+azure.openai.api.key=YOUR_AZURE_OPEN_AI_API_KEY_HERE
+azure.openai.endpoint=YOUR_AZURE_OPEN_AI_ENDPOINT_HERE
+
+#-----------------------------------------------
+# Timeout and Retry Configuration
+test.step.execution.retry.timeout.millis=10000
+test.step.execution.retry.interval.millis=1000
+verification.retry.timeout.millis=10000
+action.verification.delay.millis=1000
+
+#-----------------------------------------------
+# user UI dialog settings
+dialog.default.horizontal.gap=10
+dialog.default.vertical.gap=10
+dialog.default.font.type=Dialog
+dialog.user.interaction.check.interval.millis=100
+dialog.default.font.size=13
+
+#-----------------------------------------------
+# Element Configuration
+element.bounding.box.color=green
+# this score is the minimum score which needs to be reached during target UI element retrieval based on its name
+element.retrieval.min.target.score=0.85
+# this score is the minimum score which needs to be reached during retrieval of all UI elements which are at least partially similar to
+# the target element name - they could be later modified by user in order to enhance the retrieval results next time
+element.retrieval.min.general.score=0.4
+# this score defines the threshold value of pattern match identification by OpenCV library, top visual matches which reach this score
+# will be passed to the model in order get the best one which matches the visual appearance and textual description
+element.locator.visual.similarity.threshold=0.8
+# the max amount of matches by OpenCV library which will be selected for each target UI element screenshot. Those matches will be
+# passed to the model in order get the best one which matches the visual appearance and textual description
+element.locator.top.visual.matches=3

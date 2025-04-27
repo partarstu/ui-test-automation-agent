@@ -1,0 +1,50 @@
+{
+  "name": "Paint Application Test Case",
+  "testSteps": [
+    {
+      "stepDescription": "Click the Windows 'Start' button",
+      "testData": [],
+      "expectedResults": "Windows 'Start' menu is opened"
+    },
+    {
+      "stepDescription": "Type text",
+      "testData": ["Paint"],
+      "expectedResults": "'Paint' application icon is visible in the 'Start' menu"
+    },
+    {
+      "stepDescription": "Click the Paint application icon",
+      "testData": [],
+      "expectedResults": "'Paint' application window is visible"
+    },
+    {
+      "stepDescription": "Click 'Oval' button from the Shapes menu",
+      "testData": [],
+      "expectedResults": "'Oval' figure button is active"
+    },
+    {
+      "stepDescription": "Move the mouse to the center of the drawing pane",
+      "testData": [],
+      "expectedResults": ""
+    },
+    {
+      "stepDescription": "Click and drag the mouse 200 pixels to the right and 200 pixels to the bottom",
+      "testData": [],
+      "expectedResults": "The circle is visible on the drawing pane"
+    },
+    {
+      "stepDescription": "Click the 'Fill' button on the Tools menu",
+      "testData": [],
+      "expectedResults": "'Fill' button on the tools menu is active"
+    },
+    {
+      "stepDescription": "Click the 'Yellow' button on the Colors menu",
+      "testData": [],
+      "expectedResults": "'Yellow' button on the tools menu is active"
+    },
+    {
+      "stepDescription": "Click the mouse on the drawn circle on the drawing pane",
+      "testData": [],
+      "expectedResults": "The drawing pane has a single yellow circle"
+    }
+  ]
+}
