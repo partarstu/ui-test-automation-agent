@@ -7,6 +7,8 @@ verifies whether actual results correspond to the expected ones using computer v
 
 [![Package Project](https://github.com/partarstu/ui-test-automation-agent/actions/workflows/package.yml/badge.svg)](https://github.com/partarstu/ui-test-automation-agent/actions/workflows/package.yml)
 
+Here the corresponding article on Medium: [AI Agent That’s Rethinking UI Test Automation](https://medium.com/@partarstu/meet-the-ai-agent-thats-rethinking-ui-test-automation-d8ef9742c6d5)
+
 ## Key Features
 
 * **AI Model Integration:**
