@@ -1,0 +1,92 @@
+@startuml
+title The Execution Workflow: Step-by-Step Automation
+
+start
+:Agent loads test case (JSON file or request payload) and retrieves test steps (natural language description, optional test data, expected results);
+
+repeat :For each test step
+    partition "Action Execution" {
+        label StartActionAttempt
+        :Takes a screenshot of the AUT;
+        :Sends action description, screenshot, and test data (if any)\nto instruction AI model;
+        note right: Model determines tool to use\nand its arguments (target UI element’s description, text to type, etc.)
+        :Executes the tool chosen by the model\n(e.g., performs the click);
+
+        if (Locates the UI element (if needed)?) then (yes)
+            label LocateUIElement
+            :Vector DB is queried using target UI element’s description\nto find top semantic matches;
+            if (High-confidence matches are found?) then (yes)
+                :OpenCV library is employed to find the\ntop visual matches on the screen;
+                :Vision model determines if any visual matches\ncorrespond to target UI element’s description\n(including information about surrounding elements, “anchors”);
+                if (Multiple valid matches exist?) then (yes)
+                    :Model disambiguates them, identifying the best fit based on context;
+                endif
+                if (Suitable match found after this process?) then (no)
+                    note right: Behavior depends on execution mode
+                    if (Recoverable error (UI element search failed) AND configured timeout NOT exceeded?) then (yes)
+                        floating note: Retrying action
+                        -> StartActionAttempt;
+                    else (no or timeout exceeded)
+                        :Execution is halted (UI element search failed, unrecoverable or timeout);
+                        stop
+                    endif
+                else (yes, suitable match found)
+                    -> CheckActionError;
+                endif
+            else (no high-confidence matches found)
+                if (Low-confidence ones exist AND in attended mode?) then (yes)
+                    :User is prompted to clarify information about the target UI element;
+                    :Search is re-run;
+                    -> LocateUIElement;
+                else (no low-confidence, or not attended mode)
+                    note right: No high-confidence, or no clarification possible
+                    if (Recoverable error (UI element search failed) AND configured timeout NOT exceeded?) then (yes)
+                        floating note: Retrying action due to UI search failure
+                        -> StartActionAttempt;
+                    else (no or timeout exceeded)
+                        :Execution is halted (UI element search failed, unrecoverable or timeout);
+                        stop
+                    endif
+                endif
+            endif
+        else (no, UI element location not needed)
+            -> CheckActionError;
+        endif
+
+        label CheckActionError
+        if (Recoverable error occurs (e.g., tool execution) AND configured timeout NOT exceeded?) then (yes)
+            :Agent retries the action;
+            -> StartActionAttempt;
+        elseif (Recoverable error occurs AND configured timeout EXCEEDED?) then (yes, timeout)
+            :Execution is halted (Action error, timeout exceeded);
+            stop
+        elseif (Non-recoverable error occurs?) then (yes)
+            :Execution is halted (Action error, non-recoverable);
+            stop
+        endif
+    }
+
+    partition "Verification" {
+        label StartVerificationAttempt
+        :Takes a screenshot of the AUT;
+        :Sends expected results description and screenshot\nto vision AI model;
+        note right: Model decides if actual state corresponds to expected one,\nreports pass or fail, along with a justification.
+        if (Model reports PASS?) then (yes)
+            -> next_step_anchor;
+        else (FAIL)
+            if (Retry verification (allowing time for potential UI latency)?) then (yes)
+                :Retries the verification;
+                -> StartVerificationAttempt;
+            else (no, retry limit or not configured)
+                :Verification failure occurs, execution is halted;
+                stop
+            endif
+        endif
+    }
+    label next_step_anchor
+repeat while (All test steps have been successfully executed?) is (no)
+->[yes] All steps executed;
+
+:Test execution concludes;
+stop
+@enduml
