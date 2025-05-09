@@ -8,16 +8,16 @@ repeat :For each test step
     partition "Action Execution" {
         label StartActionAttempt
         :Takes a screenshot of the AUT;
-        :Sends action description, screenshot, and test data (if any)\nto instruction AI model;
-        note right: Model determines tool to use\nand its arguments (target UI element’s description, text to type, etc.)
-        :Executes the tool chosen by the model\n(e.g., performs the click);
+        :Sends action description, screenshot, and test data (if any) to instruction AI model;
+        note right: Model determines tool to use and its arguments (target UI element’s description, text to type, etc.)
+        :Executes the tool chosen by the model (e.g., performs the click);
 
         if (Locates the UI element (if needed)?) then (yes)
             label LocateUIElement
-            :Vector DB is queried using target UI element’s description\nto find top semantic matches;
+            :Vector DB is queried using target UI element’s description to find top semantic matches;
             if (High-confidence matches are found?) then (yes)
-                :OpenCV library is employed to find the\ntop visual matches on the screen;
-                :Vision model determines if any visual matches\ncorrespond to target UI element’s description\n(including information about surrounding elements, “anchors”);
+                :OpenCV library is employed to find the top visual matches on the screen;
+                :Vision model determines if any visual matches correspond to target UI element’s description (including information about surrounding elements, “anchors”);
                 if (Multiple valid matches exist?) then (yes)
                     :Model disambiguates them, identifying the best fit based on context;
                 endif
@@ -69,8 +69,8 @@ repeat :For each test step
     partition "Verification" {
         label StartVerificationAttempt
         :Takes a screenshot of the AUT;
-        :Sends expected results description and screenshot\nto vision AI model;
-        note right: Model decides if actual state corresponds to expected one,\nreports pass or fail, along with a justification.
+        :Sends expected results description and screenshot to vision AI model;
+        note right: Model decides if actual state corresponds to expected one, reports pass or fail, along with a justification.
         if (Model reports PASS?) then (yes)
             -> next_step_anchor;
         else (FAIL)
