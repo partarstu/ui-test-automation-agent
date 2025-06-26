@@ -19,6 +19,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
+import jakarta.enterprise.context.ApplicationScoped;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -59,6 +60,7 @@ import static org.tarik.ta.model.ModelFactory.getVisionModel;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.*;
 import static org.tarik.ta.utils.CommonUtils.*;
 
+@ApplicationScoped
 public class Agent {
     private static final Logger LOG = LoggerFactory.getLogger(Agent.class);
     protected static final Gson GSON = new Gson();

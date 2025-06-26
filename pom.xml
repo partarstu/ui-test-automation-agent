@@ -34,17 +34,45 @@
         <guava.version>33.4.8-jre</guava.version>
         <opencv.version>4.10.0-1.5.11</opencv.version>
         <openblas.version>0.3.28-1.5.11</openblas.version>
+        <a2a.sdk.version>0.2.4-SNAPSHOT</a2a.sdk.version>
+        <quarkus.platform.version>3.22.3</quarkus.platform.version>
         <main.class/>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-bom</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+        <dependency>
+            <groupId>io.a2a.sdk</groupId>
+            <artifactId>a2a-java-sdk-server-quarkus</artifactId>
+            <version>${a2a.sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.a2a.sdk</groupId>
+            <artifactId>a2a-java-sdk-core</artifactId>
+            <version>${a2a.sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.a2a.sdk</groupId>
+            <artifactId>a2a-java-sdk-server-jakarta</artifactId>
+            <version>${a2a.sdk.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
-
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>opencv</artifactId>
@@ -185,6 +213,21 @@
     </profiles>
     <build>
         <plugins>
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <extensions>true</extensions>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>generate-code</goal>
+                            <goal>generate-code-tests</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
