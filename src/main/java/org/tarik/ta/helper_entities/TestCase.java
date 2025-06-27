@@ -15,7 +15,15 @@
  */
 package org.tarik.ta.helper_entities;
 
+import org.tarik.ta.annotations.JsonClassDescription;
+import org.tarik.ta.annotations.JsonFieldDescription;
+
 import java.util.List;
 
-public record TestCase(String name, List<TestStep> testSteps) {
+@JsonClassDescription("A test case extracted from the user's request.")
+public record TestCase(
+        @JsonFieldDescription("The name of the test case, summarizing its purpose.")
+        String name,
+        @JsonFieldDescription("A list of test steps that make up the test case.")
+        List<TestStep> testSteps) {
 }

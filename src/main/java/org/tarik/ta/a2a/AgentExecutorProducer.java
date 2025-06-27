@@ -1,20 +1,6 @@
-/*
- * Copyright (c) 2025.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- *  SPDX-License-Identifier: Apache-2.0
- */
-
 package org.tarik.ta.a2a;
 
+import com.google.gson.Gson;
 import io.a2a.server.agentexecution.AgentExecutor;
 import io.a2a.server.agentexecution.RequestContext;
 import io.a2a.server.events.EventQueue;
@@ -23,9 +9,23 @@ import io.a2a.spec.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.tarik.ta.Agent;
+import org.tarik.ta.helper_entities.TestCase;
+import org.tarik.ta.prompts.TestCaseExtractionPrompt;
+import org.tarik.ta.utils.CommonUtils;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import static java.util.Optional.*;
+import static java.util.stream.Collectors.joining;
+import static org.tarik.ta.Agent.executeTestCase;
+import static org.tarik.ta.model.ModelFactory.getInstructionModel;
+import static org.tarik.ta.utils.CommonUtils.isBlank;
 
 @ApplicationScoped
 public class AgentExecutorProducer {
@@ -38,31 +38,66 @@ public class AgentExecutorProducer {
     }
 
     private record UiAgentExecutor(Agent agent) implements AgentExecutor {
+        // Replaced Semaphore with a single-threaded executor for queuing
+        private static final ExecutorService taskExecutor = Executors.newSingleThreadExecutor();
+        private static final Logger LOG = LoggerFactory.getLogger(UiAgentExecutor.class);
+        private static final Gson GSON = new Gson();
+
 
         @Override
         public void execute(RequestContext context, EventQueue eventQueue) throws JSONRPCError {
             TaskUpdater updater = new TaskUpdater(context, eventQueue);
-
-            // mark the task as submitted and start working on it
             if (context.getTask() == null) {
                 updater.submit();
             }
-            updater.startWork();
 
-            // extract the text from the message
-            String userMessage = extractTextFromMessage(context.getMessage());
+            LOG.info("Received test case execution request. Submitting to the execution queue.");
 
-            // call the weather agent with the user's message
+            // Submit the task to the executor service to be queued and executed
+            taskExecutor.submit(() -> {
+                var taskId = context.getTask().getId();
+                LOG.info("Starting task {} from the queue.", taskId);
+                try {
+                    updater.startWork();
+                    extractTextFromMessage(context.getMessage()).ifPresentOrElse(userMessage ->
+                                    parseTestCaseFromRequest(userMessage).ifPresentOrElse(requestedTestCase -> {
+                                        String testCaseName = requestedTestCase.name();
+                                        try {
+                                            LOG.info("Starting execution of the test case '{}'", testCaseName);
+                                            var result = executeTestCase(requestedTestCase);
+                                            LOG.info("Finished execution of the test case '{}'", testCaseName);
+                                            TextPart responsePart = new TextPart(GSON.toJson(result), null);
+                                            List<Part<?>> parts = List.of(responsePart);
+                                            updater.addArtifact(parts, null, null, null);
+                                            updater.complete();
+                                        } catch (Exception e) {
+                                            LOG.error("Got exception during the execution of the test case '{}'", testCaseName, e);
+                                            failTask(updater, "Got exception while executing the test case. " +
+                                                    "Before re-sending please investigate the root cause based on the agent's logs.");
+                                        }
+                                    },
+                                    () -> {
+                                        var message = "Request for test case execution either contained no valid test case or insufficient " +
+                                                        "information in order to execute it.";
+                                        LOG.error(message);
+                                        failTask(updater, message);
+                                    }),
+                            () -> {
+                                var message = "Request for test case execution was empty.";
+                                LOG.error(message);
+                                failTask(updater, message);
+                            });
+                } catch (Exception e) {
+                    LOG.error("Error while processing test case execution request for task {}", taskId, e);
+                    failTask(updater, "Couldn't start the task %s".formatted(taskId));
+                }
+            });
+        }
 
-            String response = "";//agent.chat(userMessage);
-
-            // create the response part
-            TextPart responsePart = new TextPart(response, null);
-            List<Part<?>> parts = List.of(responsePart);
-
-            // add the response as an artifact and complete the task
-            updater.addArtifact(parts, null, null, null);
-            updater.complete();
+        private static void failTask(TaskUpdater updater, String message) {
+            TextPart errorPart = new TextPart(message, null);
+            List<Part<?>> parts = List.of(errorPart);
+            updater.fail(updater.newAgentMessage(parts, null));
         }
 
         @Override
@@ -81,16 +116,43 @@ public class AgentExecutorProducer {
             updater.cancel();
         }
 
-        private String extractTextFromMessage(Message message) {
-            StringBuilder textBuilder = new StringBuilder();
-            if (message.getParts() != null) {
-                for (Part part : message.getParts()) {
-                    if (part instanceof TextPart textPart) {
-                        textBuilder.append(textPart.getText());
-                    }
-                }
+        private Optional<String> extractTextFromMessage(Message message) {
+            String result = ofNullable(message.getParts())
+                    .stream()
+                    .filter(TextPart.class::isInstance)
+                    .map(part -> ((TextPart) part).getText())
+                    .filter(CommonUtils::isNotBlank)
+                    .map(String::trim)
+                    .collect(joining("\n"))
+                    .trim();
+            return result.isBlank() ? empty() : of(result);
+        }
+
+        private static Optional<TestCase> parseTestCaseFromRequest(String message) {
+            LOG.info("Attempting to extract TestCase instance from user message using AI model.");
+            if (isBlank(message)) {
+                LOG.error("User message is blank, cannot extract a TestCase.");
+                return empty();
             }
-            return textBuilder.toString();
+
+            try (var model = getInstructionModel()) {
+                var prompt = TestCaseExtractionPrompt.builder()
+                        .withUserRequest(message)
+                        .build();
+                TestCase extractedTestCase = model.generateAndGetResponseAsObject(prompt, "test case extraction");
+                if (extractedTestCase == null || isBlank(extractedTestCase.name()) || extractedTestCase.testSteps() == null ||
+                        extractedTestCase.testSteps().isEmpty()) {
+                    LOG.warn("Model could not extract a valid TestCase from the provided by the user message, original message: {}",
+                            message);
+                    return empty();
+                } else {
+                    LOG.info("Successfully extracted TestCase: '{}'", extractedTestCase.name());
+                    return of(extractedTestCase);
+                }
+            } catch (Exception e) {
+                LOG.error("Failed to extract TestCase from user message due to an exception.", e);
+                return empty();
+            }
         }
     }
 }

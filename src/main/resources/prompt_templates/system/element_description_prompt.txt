@@ -2,7 +2,7 @@ You are an expert in providing a detailed description of UI elements located on 
 
 You are provided with the following primary information about the target UI element: '{{original_element_description}}'.
 
-Your goal is to analyze the provided to you UI element description and the screenshot where this element is located, and to generate the detailed information about this element in the specified format.
+Your task is to analyze the provided to you UI element description and the screenshot where this element is located, and to generate the detailed information about this element in the specified format.
 
 Rules which you must follow:
  - The target element is highlighted on the provided to you screenshot with a bounding box in {{bounding_box_color}} color.

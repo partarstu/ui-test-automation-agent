@@ -25,9 +25,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.tarik.ta.dto.TestExecutionResult;
+import org.tarik.ta.dto.TestStepResult;
 import org.tarik.ta.dto.VerificationExecutionResult;
-import org.tarik.ta.exceptions.ActionExecutionException;
-import org.tarik.ta.exceptions.VerificationExecutionException;
 import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.helper_entities.TestStep;
 import org.tarik.ta.model.GenAiModel;
@@ -37,16 +37,18 @@ import org.tarik.ta.prompts.VerificationExecutionPrompt;
 import org.tarik.ta.tools.AbstractTools.ToolExecutionResult;
 import org.tarik.ta.tools.CommonTools;
 import org.tarik.ta.utils.CommonUtils;
+import org.tarik.ta.utils.ImageUtils;
 
 import java.awt.image.BufferedImage;
 import java.time.Instant;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.*;
+import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.ERROR;
+import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.tools.CommonTools.waitSeconds;
 import static org.tarik.ta.utils.CommonUtils.sleepMillis;
 
@@ -66,6 +68,8 @@ class AgentTest {
     private MockedStatic<CommonUtils> commonUtilsMockedStatic;
     private MockedStatic<AgentConfig> agentConfigMockedStatic;
     private MockedStatic<CommonTools> commonToolsMockedStatic;
+    private MockedStatic<ImageUtils> imageUtilsMockedStatic;
+
 
     // Constants for configuration
     private static final int TEST_STEP_TIMEOUT_MILLIS = 50;
@@ -85,12 +89,14 @@ class AgentTest {
         commonUtilsMockedStatic = mockStatic(CommonUtils.class);
         agentConfigMockedStatic = mockStatic(AgentConfig.class);
         commonToolsMockedStatic = mockStatic(CommonTools.class);
+        imageUtilsMockedStatic = mockStatic(ImageUtils.class);
+
 
         // Model Factory
         modelFactoryMockedStatic.when(ModelFactory::getInstructionModel).thenReturn(mockModel);
         modelFactoryMockedStatic.when(ModelFactory::getVisionModel).thenReturn(mockModel);
 
-        // Common Utils
+        // Common Utils & ImageUtils
         commonUtilsMockedStatic.when(() -> CommonUtils.isNotBlank(anyString())).thenCallRealMethod();
         commonUtilsMockedStatic.when(() -> CommonUtils.isNotBlank(isNull())).thenReturn(false);
         commonUtilsMockedStatic.when(CommonUtils::captureScreen).thenReturn(mockScreenshot);
@@ -98,6 +104,8 @@ class AgentTest {
         commonUtilsMockedStatic.when(() -> CommonUtils.waitUntil(any(Instant.class))).thenAnswer(_ -> null);
         commonToolsMockedStatic.when(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)))
                 .thenReturn(new ToolExecutionResult(SUCCESS, "Wait completed", false));
+        imageUtilsMockedStatic.when(() -> ImageUtils.convertImageToBase64(any(), anyString())).thenReturn("mock-base64-string");
+
 
         // Agent Config
         agentConfigMockedStatic.when(AgentConfig::getTestStepExecutionRetryTimeoutMillis).thenReturn(TEST_STEP_TIMEOUT_MILLIS);
@@ -128,6 +136,7 @@ class AgentTest {
         commonUtilsMockedStatic.close();
         agentConfigMockedStatic.close();
         commonToolsMockedStatic.close();
+        imageUtilsMockedStatic.close();
     }
 
     @Test
@@ -138,9 +147,13 @@ class AgentTest {
         TestCase testCase = new TestCase("Single Step Success", List.of(step));
 
         // When
-        Agent.executeTestCase(testCase);
+        TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
+        assertThat(result.success()).isTrue();
+        assertThat(result.stepResults()).hasSize(1);
+        assertThat(result.stepResults().getFirst().success()).isTrue();
+
         verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)));
         commonUtilsMockedStatic.verify(() -> sleepMillis(VERIFICATION_DELAY_MILLIS));
@@ -156,9 +169,13 @@ class AgentTest {
         TestCase testCase = new TestCase("Single Action Only", List.of(step));
 
         // When
-        Agent.executeTestCase(testCase);
+        TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
+        assertThat(result.success()).isTrue();
+        assertThat(result.stepResults()).hasSize(1);
+        assertThat(result.stepResults().getFirst().success()).isTrue();
+
         verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)));
         commonUtilsMockedStatic.verify(() -> sleepMillis(anyInt()), never());
@@ -181,13 +198,17 @@ class AgentTest {
                 .thenReturn(new VerificationExecutionResult(true, "Verify 2 OK"));
 
         // When
-        Agent.executeTestCase(testCase);
+        TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
+        assertThat(result.success()).isTrue();
+        assertThat(result.stepResults()).hasSize(2);
+        assertThat(result.stepResults()).allMatch(TestStepResult::success);
+
         verify(mockModel, times(2)).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("1")), times(2));
         commonUtilsMockedStatic.verify(() -> sleepMillis(VERIFICATION_DELAY_MILLIS), times(2));
-        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(2)); // Corrected to times(2)
+        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(2));
         verify(mockModel, times(2)).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class),
                 eq("verification execution"));
     }
@@ -203,9 +224,10 @@ class AgentTest {
         ArgumentCaptor<ActionExecutionPrompt> promptCaptor = forClass(ActionExecutionPrompt.class);
 
         // When
-        Agent.executeTestCase(testCase);
+        TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
+        assertThat(result.success()).isTrue();
         verify(mockModel).generate(promptCaptor.capture(), anyList(), eq("action execution"));
         assertThat(promptCaptor.getValue().getUserMessage().singleText()).contains(expectedInstructionFragment);
 
@@ -217,8 +239,8 @@ class AgentTest {
     }
 
     @Test
-    @DisplayName("Verification fails, should throw exception")
-    void executeTestCaseVerificationFailsShouldThrowException() {
+    @DisplayName("Verification fails, should return failed result")
+    void executeTestCaseVerificationFailsShouldReturnFailedResult() {
         // Given
         String verification = "Fail Verification";
         TestStep step = new TestStep("Action", null, verification);
@@ -227,9 +249,17 @@ class AgentTest {
         when(mockModel.generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), eq("verification execution")))
                 .thenReturn(new VerificationExecutionResult(false, failMsg));
 
-        // When & Then
-        assertThatThrownBy(() -> Agent.executeTestCase(testCase)).isInstanceOf(VerificationExecutionException.class)
-                .hasMessageMatching("Verifying that %s failed. %s. Interrupting test case execution.".formatted(verification, failMsg));
+        // When
+        TestExecutionResult result = Agent.executeTestCase(testCase);
+
+        // Then
+        assertThat(result.success()).isFalse();
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        assertThat(stepResult.errorMessage()).isEqualTo("Verifying that '%s' failed. %s.".formatted(verification, failMsg));
+        assertThat(stepResult.screenshotBase64()).isNotNull();
+
         verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)));
         verify(mockModel, atLeast(2)).generateAndGetResponseAsObject(
@@ -238,8 +268,8 @@ class AgentTest {
 
 
     @Test
-    @DisplayName("Action fails with no retry needed, should throw exception")
-    void executeTestCaseActionWithErrorNoRetryShouldThrowException() {
+    @DisplayName("Action fails with no retry needed, should return failed result")
+    void executeTestCaseActionWithErrorNoRetryShouldReturnFailedResult() {
         // Given
         String action = "Fail Action";
         TestStep step = new TestStep(action, null, "Verify");
@@ -248,18 +278,26 @@ class AgentTest {
         commonToolsMockedStatic.when(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)))
                 .thenReturn(new ToolExecutionResult(ERROR, failMsg, false));
 
-        // When & Then
-        assertThatThrownBy(() -> Agent.executeTestCase(testCase)).isInstanceOf(ActionExecutionException.class)
-                .hasMessage("Failure while executing '%s'. Root cause: %s. Interrupting test case execution."
-                        .formatted(action, failMsg));
+        // When
+        TestExecutionResult result = Agent.executeTestCase(testCase);
+
+        // Then
+        assertThat(result.success()).isFalse();
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        assertThat(stepResult.errorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s."
+                .formatted(action, failMsg));
+        assertThat(stepResult.screenshotBase64()).isNotNull();
+
         verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)));
         verify(mockModel, never()).generateAndGetResponseAsObject(any(), any());
     }
 
     @Test
-    @DisplayName("run: Tool execution throws exception, should throw exception")
-    void executeTestCaseToolExecutionThrowsExceptionShouldThrowException() {
+    @DisplayName("Tool execution throws exception, should return failed result")
+    void executeTestCaseToolExecutionThrowsExceptionShouldReturnFailedResult() {
         // Given
         String action = "Exception Action";
         TestStep step = new TestStep(action, null, "Verify");
@@ -267,10 +305,18 @@ class AgentTest {
         RuntimeException toolException = new RuntimeException("Tool exploded as expected");
         commonToolsMockedStatic.when(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS))).thenThrow(toolException);
 
-        // When & Then
-        assertThatThrownBy(() -> Agent.executeTestCase(testCase)).isInstanceOf(ActionExecutionException.class)
-                .hasMessageMatching(("Failure while executing '%s'. Root cause: 'waitSeconds' tool execution failed. The cause: %s. " +
-                        "Interrupting test case execution.").formatted(action, toolException.getMessage()));
+        // When
+        TestExecutionResult result = Agent.executeTestCase(testCase);
+
+        // Then
+        assertThat(result.success()).isFalse();
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        String expectedCauseMessage = "'%s' tool execution failed. The cause: %s".formatted(MOCK_TOOL_NAME, toolException.getMessage());
+        assertThat(stepResult.errorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s.".formatted(action,
+                expectedCauseMessage));
+        assertThat(stepResult.screenshotBase64()).isNotNull();
 
         verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("1")));
@@ -278,8 +324,8 @@ class AgentTest {
     }
 
     @Test
-    @DisplayName("run: Invalid tool name requested by model, should throw exception")
-    void executeTestCaseInvalidToolNameRequestedShouldThrowException() {
+    @DisplayName("Invalid tool name requested by model, should return failed result")
+    void executeTestCaseInvalidToolNameRequestedShouldReturnFailedResult() {
         // Given
         String action = "Invalid Tool Action";
         TestStep step = new TestStep(action, null, "Verify");
@@ -292,18 +338,26 @@ class AgentTest {
                 .build();
         when(mockAiMessage.toolExecutionRequests()).thenReturn(List.of(invalidRequest));
 
-        // When & Then
-        assertThatThrownBy(() -> Agent.executeTestCase(testCase)).isInstanceOf(ActionExecutionException.class)
-                .hasMessageMatching(("Failure while executing '%s'. Root cause: The requested tool 'nonExistentTool' is not registered, " +
-                        "please fix the prompt. Interrupting test case execution.").formatted(action));
+        // When
+        TestExecutionResult result = Agent.executeTestCase(testCase);
+
+        // Then
+        assertThat(result.success()).isFalse();
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        String expectedCause = "The requested tool 'nonExistentTool' is not registered, please fix the prompt.";
+        assertThat(stepResult.errorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s"
+                .formatted(action, expectedCause));
+        assertThat(stepResult.screenshotBase64()).isNotNull();
 
         verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
         verify(mockModel, never()).generateAndGetResponseAsObject(any(), any());
     }
 
     @Test
-    @DisplayName("run: Invalid JSON arguments for tool, should throw exception")
-    void executeTestCaseInvalidJsonArgumentsShouldThrowException() {
+    @DisplayName("Invalid JSON arguments for tool, should return failed result")
+    void executeTestCaseInvalidJsonArgumentsShouldReturnFailedResult() {
         // Given
         String action = "Invalid Args Action";
         TestStep step = new TestStep(action, null, "Verify");
@@ -316,12 +370,18 @@ class AgentTest {
                 .build();
         when(mockAiMessage.toolExecutionRequests()).thenReturn(List.of(invalidArgsRequest));
 
-        // When & Then
-        assertThatThrownBy(() -> Agent.executeTestCase(testCase)).isInstanceOf(ActionExecutionException.class)
-                .hasMessageMatching(("Failure while executing '%s'. Root cause: .*IllegalStateException.*Interrupting test case " +
-                        "execution.").formatted(action));
+        // When
+        TestExecutionResult result = Agent.executeTestCase(testCase);
 
-        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution")); // Corrected to times(1)
+        // Then
+        assertThat(result.success()).isFalse();
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        assertThat(stepResult.errorMessage()).startsWith("Failure while executing action '%s'. Root cause: ".formatted(action));
+        assertThat(stepResult.screenshotBase64()).isNotNull();
+
+        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
         verify(mockModel, never()).generateAndGetResponseAsObject(any(), any());
     }
 
@@ -340,9 +400,10 @@ class AgentTest {
                 .thenReturn(new VerificationExecutionResult(true, successMsg)); // Second call succeeds
 
         // When
-        Agent.executeTestCase(testCase);
+        TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
+        assertThat(result.success()).isTrue();
         verify(mockModel, times(2)).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class),
                 eq("verification execution"));
     }

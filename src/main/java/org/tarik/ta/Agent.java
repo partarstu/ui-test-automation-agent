@@ -24,9 +24,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.tarik.ta.dto.TestExecutionResult;
+import org.tarik.ta.dto.TestStepResult;
 import org.tarik.ta.dto.VerificationExecutionResult;
-import org.tarik.ta.exceptions.ActionExecutionException;
-import org.tarik.ta.exceptions.VerificationExecutionException;
 import org.tarik.ta.helper_entities.ActionExecutionResult;
 import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.helper_entities.TestStep;
@@ -38,7 +38,9 @@ import org.tarik.ta.tools.AbstractTools.ToolExecutionStatus;
 import org.tarik.ta.tools.CommonTools;
 import org.tarik.ta.tools.KeyboardTools;
 import org.tarik.ta.tools.MouseTools;
+import org.tarik.ta.utils.ImageUtils;
 
+import java.awt.image.BufferedImage;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -57,7 +59,7 @@ import static java.util.stream.IntStream.range;
 import static org.tarik.ta.AgentConfig.*;
 import static org.tarik.ta.model.ModelFactory.getInstructionModel;
 import static org.tarik.ta.model.ModelFactory.getVisionModel;
-import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.*;
+import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.utils.CommonUtils.*;
 
 @ApplicationScoped
@@ -81,12 +83,11 @@ public class Agent {
         String useCaseJsonPath = args[0];
         deserializeJsonFromFile(useCaseJsonPath, TestCase.class).ifPresentOrElse(testCase -> {
             LOG.info("Starting Agent execution for test case: {}", testCase.name());
-            try {
-                executeTestCase(testCase);
-                LOG.info("Finished Agent execution successfully for test case: {}", testCase.name());
-            } catch (Exception e) {
-                LOG.error("Agent execution failed for test case: {}", testCase.name(), e);
-                throw e;
+            TestExecutionResult result = executeTestCase(testCase);
+            LOG.info("Finished Agent execution for test case: {}", testCase.name());
+            System.out.println(GSON.toJson(result));
+            if (!result.success()) {
+                exit(ERROR_STATUS);
             }
         }, () -> {
             var message = "Failed to load test case from: " + useCaseJsonPath;
@@ -95,7 +96,12 @@ public class Agent {
         });
     }
 
-    public static void executeTestCase(TestCase testCase) throws IllegalStateException {
+
+
+    public static TestExecutionResult executeTestCase(TestCase testCase) {
+        List<TestStepResult> stepResults = new ArrayList<>();
+        boolean overallSuccess = true;
+
         for (TestStep testStep : testCase.testSteps()) {
             var actionInstruction = testStep.stepDescription();
             var verificationInstruction = testStep.expectedResults();
@@ -106,20 +112,45 @@ public class Agent {
                 actionInstructionWithData += " using following input data: '%s'".formatted(String.join("', '", testData));
             }
 
-            var actionResult = processActionRequest(actionInstructionWithData);
-            if (!actionResult.success()) {
-                throw new ActionExecutionException(actionInstructionWithData, actionResult);
-            }
-
-            if (isNotBlank(verificationInstruction)) {
-                sleepMillis(ACTION_VERIFICATION_DELAY_MILLIS);
-                var finalInstruction = "Verify that %s".formatted(verificationInstruction);
-                var verificationResult = processVerificationRequest(finalInstruction);
-                if (!verificationResult.success()) {
-                    throw new VerificationExecutionException(verificationInstruction, verificationResult);
+            try {
+                var actionResult = processActionRequest(actionInstructionWithData);
+                if (!actionResult.success()) {
+                    var errorMessage = "Failure while executing action '%s'. Root cause: %s."
+                            .formatted(actionInstructionWithData, actionResult.message());
+                    addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage);
+                    return new TestExecutionResult(testCase.name(), false, stepResults);
                 }
+
+                if (isNotBlank(verificationInstruction)) {
+                    sleepMillis(ACTION_VERIFICATION_DELAY_MILLIS);
+                    var finalInstruction = "Verify that %s".formatted(verificationInstruction);
+                    var verificationResult = processVerificationRequest(finalInstruction);
+                    if (!verificationResult.success()) {
+                        var errorMessage = "Verifying that '%s' failed. %s."
+                                .formatted(verificationInstruction, verificationResult.message());
+                        addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage);
+                        return new TestExecutionResult(testCase.name(), false, stepResults);
+                    }
+                }
+
+                stepResults.add(new TestStepResult(testStep, true, null, null));
+            } catch (Exception e) {
+                LOG.error("Unexpected error while executing the test step: '{}'", testStep.stepDescription(), e);
+                addFailedTestStepWithScreenshot(testStep, stepResults, e.getMessage());
+                return new TestExecutionResult(testCase.name(), false, stepResults);
             }
         }
+        return new TestExecutionResult(testCase.name(), overallSuccess, stepResults);
+    }
+
+    private static void addFailedTestStepWithScreenshot(TestStep testStep, List<TestStepResult> stepResults, String errorMessage) {
+        String screenshot = captureScreenAsBase64();
+        stepResults.add(new TestStepResult(testStep, false, errorMessage, screenshot));
+    }
+
+    private static String captureScreenAsBase64() {
+        BufferedImage screenshot = captureScreen();
+        return ImageUtils.convertImageToBase64(screenshot, "png");
     }
 
     private static ActionExecutionResult processActionRequest(String action) {
