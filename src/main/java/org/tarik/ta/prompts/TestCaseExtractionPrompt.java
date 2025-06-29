@@ -42,7 +42,7 @@ public class TestCaseExtractionPrompt extends StructuredResponsePrompt<TestCase>
 
     @Override
     protected String getUserMessageTemplate() {
-        return "The original user request:\n{{user_request}}";
+        return "{{user_request}}";
     }
 
     @Override

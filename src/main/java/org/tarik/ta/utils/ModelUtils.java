@@ -18,20 +18,19 @@ package org.tarik.ta.utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
+import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import org.tarik.ta.annotations.JsonFieldDescription;
 import org.tarik.ta.annotations.JsonClassDescription;
 
-import java.lang.reflect.Field;
 import java.util.Optional;
-import java.util.HashMap;
-import java.util.Map;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 
 public class ModelUtils {
     private static final ObjectMapper OBJECT_MAPPER = createObjectMapper();
+    private static final JsonSchemaGenerator JSON_SCHEMA_GENERATOR = new JsonSchemaGenerator(OBJECT_MAPPER);
 
     public static <T> T parseModelResponseAsObject(ChatResponse response, Class<T> objectClass) {
         var objectClassName = objectClass.getSimpleName();
@@ -51,17 +50,9 @@ public class ModelUtils {
     }
 
     public static <T> String getJsonSchemaDescription(Class<T> clazz) {
-        Map<String, Object> properties = new HashMap<>();
-        for (Field field : clazz.getDeclaredFields()) {
-            var annotation = field.getAnnotation(JsonFieldDescription.class);
-            if (annotation != null) {
-                String fieldType = field.getType().getSimpleName();
-                properties.put(field.getName(), "%s; %s".formatted(fieldType.toLowerCase(), annotation.value()));
-            }
-        }
-
         try {
-            return OBJECT_MAPPER.writeValueAsString(properties);
+            JsonSchema schema = JSON_SCHEMA_GENERATOR.generateSchema(clazz);
+            return OBJECT_MAPPER.writeValueAsString(schema);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
@@ -88,3 +79,4 @@ public class ModelUtils {
     }
 
 }
+

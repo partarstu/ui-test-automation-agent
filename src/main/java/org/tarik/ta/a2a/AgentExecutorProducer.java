@@ -12,20 +12,28 @@ import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tarik.ta.Agent;
+import org.tarik.ta.dto.TestExecutionResult;
+import org.tarik.ta.dto.TestStepResult;
 import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.prompts.TestCaseExtractionPrompt;
 import org.tarik.ta.utils.CommonUtils;
+import org.tarik.ta.utils.ImageUtils;
 
+import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import static java.util.Optional.*;
 import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.toMap;
 import static org.tarik.ta.Agent.executeTestCase;
 import static org.tarik.ta.model.ModelFactory.getInstructionModel;
 import static org.tarik.ta.utils.CommonUtils.isBlank;
+import static org.tarik.ta.utils.ImageUtils.convertImageToBase64;
 
 @ApplicationScoped
 public class AgentExecutorProducer {
@@ -52,36 +60,20 @@ public class AgentExecutorProducer {
             }
 
             LOG.info("Received test case execution request. Submitting to the execution queue.");
-
-            // Submit the task to the executor service to be queued and executed
             taskExecutor.submit(() -> {
-                var taskId = context.getTask().getId();
+                var taskId = context.getTaskId();
                 LOG.info("Starting task {} from the queue.", taskId);
                 try {
                     updater.startWork();
                     extractTextFromMessage(context.getMessage()).ifPresentOrElse(userMessage ->
-                                    parseTestCaseFromRequest(userMessage).ifPresentOrElse(requestedTestCase -> {
-                                        String testCaseName = requestedTestCase.name();
-                                        try {
-                                            LOG.info("Starting execution of the test case '{}'", testCaseName);
-                                            var result = executeTestCase(requestedTestCase);
-                                            LOG.info("Finished execution of the test case '{}'", testCaseName);
-                                            TextPart responsePart = new TextPart(GSON.toJson(result), null);
-                                            List<Part<?>> parts = List.of(responsePart);
-                                            updater.addArtifact(parts, null, null, null);
-                                            updater.complete();
-                                        } catch (Exception e) {
-                                            LOG.error("Got exception during the execution of the test case '{}'", testCaseName, e);
-                                            failTask(updater, "Got exception while executing the test case. " +
-                                                    "Before re-sending please investigate the root cause based on the agent's logs.");
-                                        }
-                                    },
-                                    () -> {
-                                        var message = "Request for test case execution either contained no valid test case or insufficient " +
-                                                        "information in order to execute it.";
-                                        LOG.error(message);
-                                        failTask(updater, message);
-                                    }),
+                                    parseTestCaseFromRequest(userMessage).ifPresentOrElse(requestedTestCase ->
+                                                    requestTestCaseExecution(requestedTestCase, updater),
+                                            () -> {
+                                                var message = "Request for test case execution either contained no valid test case or " +
+                                                        "insufficient information in order to execute it.";
+                                                LOG.error(message);
+                                                failTask(updater, message);
+                                            }),
                             () -> {
                                 var message = "Request for test case execution was empty.";
                                 LOG.error(message);
@@ -92,6 +84,37 @@ public class AgentExecutorProducer {
                     failTask(updater, "Couldn't start the task %s".formatted(taskId));
                 }
             });
+        }
+
+        private void requestTestCaseExecution(TestCase requestedTestCase, TaskUpdater updater) {
+            String testCaseName = requestedTestCase.name();
+            try {
+                LOG.info("Starting execution of the test case '{}'", testCaseName);
+                var result = executeTestCase(requestedTestCase);
+                LOG.info("Finished execution of the test case '{}'", testCaseName);
+                List<Part<?>> parts = new LinkedList<>();
+                TextPart textPart = new TextPart(GSON.toJson(result), null);
+                parts.add(textPart);
+                addScreenshots(result, parts);
+                updater.addArtifact(parts, null, null, null);
+                updater.complete();
+            } catch (Exception e) {
+                LOG.error("Got exception during the execution of the test case '{}'", testCaseName, e);
+                failTask(updater, "Got exception while executing the test case. " +
+                        "Before re-sending please investigate the root cause based on the agent's logs.");
+            }
+        }
+
+        private static void addScreenshots(TestExecutionResult result, List<Part<?>> parts) {
+            result.stepResults().stream()
+                    .filter(r -> r.getScreenshot() != null)
+                    .map(r -> new FileWithBytes(
+                            "image/png",
+                            "Screenshot for the test step %s".formatted(r.getTestStep().stepDescription()),
+                            convertImageToBase64(r.getScreenshot(), "png"))
+                    )
+                    .map(FilePart::new)
+                    .forEach(parts::add);
         }
 
         private static void failTask(TaskUpdater updater, String message) {
@@ -119,7 +142,8 @@ public class AgentExecutorProducer {
         private Optional<String> extractTextFromMessage(Message message) {
             String result = ofNullable(message.getParts())
                     .stream()
-                    .filter(TextPart.class::isInstance)
+                    .flatMap(Collection::stream)
+                    .filter(p->p instanceof TextPart)
                     .map(part -> ((TextPart) part).getText())
                     .filter(CommonUtils::isNotBlank)
                     .map(String::trim)

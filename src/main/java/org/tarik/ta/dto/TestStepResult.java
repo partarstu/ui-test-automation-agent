@@ -19,22 +19,39 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.tarik.ta.helper_entities.TestStep;
 
+import java.awt.image.BufferedImage;
 import java.util.Objects;
 
 /**
  * Represents the result of a single test step execution.
- *
- * @param testStep The test step that was executed.
- * @param success True if the step executed successfully, false otherwise.
- * @param errorMessage A descriptive error message if the step failed, otherwise null.
- * @param screenshotBase64 A Base64 encoded string of a screenshot taken at the end of the step, can be null.
  */
-public record TestStepResult(
-        @NotNull TestStep testStep,
-        boolean success,
-        @Nullable String errorMessage,
-        @Nullable String screenshotBase64
-) {
+public final class TestStepResult {
+    private final @NotNull TestStep testStep;
+    private final boolean success;
+    private final @Nullable String errorMessage;
+    private final @Nullable String actualResult;
+    private final @Nullable transient BufferedImage screenshot;
+
+    /**
+     * @param testStep     The test step that was executed.
+     * @param success      True if the step executed successfully, false otherwise.
+     * @param errorMessage A descriptive error message if the step failed, otherwise null.
+     * @param screenshot   A screenshot taken at the end of the step, can be null.
+     */
+    public TestStepResult(
+            @NotNull TestStep testStep,
+            boolean success,
+            @Nullable String errorMessage,
+            @Nullable String actualResult,
+            @Nullable BufferedImage screenshot
+    ) {
+        this.testStep = testStep;
+        this.success = success;
+        this.errorMessage = errorMessage;
+        this.actualResult = actualResult;
+        this.screenshot = screenshot;
+    }
+
     /**
      * Provides a human-friendly string representation of the TestStepResult instance.
      * The output is formatted for console readability.
@@ -45,16 +62,58 @@ public record TestStepResult(
     public @NotNull String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("TestStepResult:\n");
-        sb.append("  - Step: ").append(testStep.toString()).append("\n");
+        sb.append("  - Step: ").append(testStep).append("\n");
         sb.append("  - Status: ").append(success ? "SUCCESS" : "FAILURE").append("\n");
 
         if (!success && errorMessage != null && !errorMessage.trim().isEmpty()) {
             sb.append("  - Error: ").append(errorMessage).append("\n");
         }
 
-        boolean screenshotExists = screenshotBase64 != null && !screenshotBase64.trim().isEmpty();
+        boolean screenshotExists = screenshot != null;
         sb.append("  - Screenshot: ").append(screenshotExists ? "Available" : "Not Available");
 
         return sb.toString();
     }
+
+    public @NotNull TestStep getTestStep() {
+        return testStep;
+    }
+
+    public boolean isSuccessful() {
+        return success;
+    }
+
+    public @Nullable String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public @Nullable String getActualResult() {
+        return actualResult;
+    }
+
+    public @Nullable BufferedImage getScreenshot() {
+        return screenshot;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        }
+        if (obj == null || obj.getClass() != this.getClass()) {
+            return false;
+        }
+        var that = (TestStepResult) obj;
+        return Objects.equals(this.testStep, that.testStep) &&
+                this.success == that.success &&
+                Objects.equals(this.errorMessage, that.errorMessage) &&
+                Objects.equals(this.actualResult, that.actualResult) &&
+                Objects.equals(this.screenshot, that.screenshot);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(testStep, success, errorMessage, actualResult, screenshot);
+    }
+
 }

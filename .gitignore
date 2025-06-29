@@ -52,3 +52,4 @@ temp*.png
 .run
 dependency-reduced-pom.xml
 ManualTest.java
+GEMINI.md

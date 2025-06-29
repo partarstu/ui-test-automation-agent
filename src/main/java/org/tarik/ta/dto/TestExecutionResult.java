@@ -22,19 +22,21 @@ import java.util.List;
 /**
  * Represents the result of the test execution.
  *
- * @param testCaseName The test step that was executed.
- * @param success      True if the all teh test steps were executed successfully, false otherwise.
- * @param stepResults  The execution results of each test step.
+ * @param testCaseName        The test step that was executed.
+ * @param testExecutionStatus Execution status of the test.
+ * @param stepResults         The execution results of each test step.
  */
-public record TestExecutionResult(String testCaseName, boolean success, @NotNull List<TestStepResult> stepResults) {
+public record TestExecutionResult(String testCaseName, TestExecutionStatus testExecutionStatus, @NotNull List<TestStepResult> stepResults) {
+    public enum TestExecutionStatus {
+        PASSED, FAILED, ERROR
+    }
+
     @Override
     public @NotNull String toString() {
         StringBuilder sb = new StringBuilder();
-        String overallStatus = success ? "PASSED" : "FAILED";
-
         sb.append("============================================================\n");
         sb.append("Test Case: ").append(testCaseName).append("\n");
-        sb.append("Overall Result: ").append(overallStatus).append("\n");
+        sb.append("Execution Result: ").append(testExecutionStatus).append("\n");
         sb.append("============================================================\n");
         sb.append("Steps:\n");
 
