@@ -24,6 +24,8 @@ import java.util.List;
 public record TestCase(
         @JsonFieldDescription("The name of the test case, summarizing its purpose.")
         String name,
+        @JsonFieldDescription("All preconditions which need to be fulfilled before the test execution can be started.")
+        String preconditions,
         @JsonFieldDescription("A list of test steps that make up the test case.")
         List<TestStep> testSteps) {
 }

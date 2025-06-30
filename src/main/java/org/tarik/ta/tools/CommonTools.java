@@ -18,6 +18,8 @@ package org.tarik.ta.tools;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 
+import java.io.IOException;
+
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.ERROR;
 import static org.tarik.ta.utils.CommonUtils.parseStringAsInteger;
 import static org.tarik.ta.utils.CommonUtils.sleepSeconds;
@@ -32,5 +34,15 @@ public class CommonTools extends AbstractTools {
                 })
                 .orElseGet(() -> new ToolExecutionResult(ERROR, "'%s' is not a valid integer value for the seconds to wait for."
                         .formatted(secondsAmount), true));
+    }
+
+    @Tool(value = "Opens the Chrome browser with the specified URL. Use this tool to navigate to a web page.")
+    public static ToolExecutionResult openChromeBrowser(@P(value = "The URL to open in Chrome.") String url) {
+        try {
+            Runtime.getRuntime().exec(new String[]{"cmd", "/c", "start chrome"});
+            return getSuccessfulResult("Successfully opened Chrome with URL: " + url);
+        } catch (IOException e) {
+            return getFailedToolExecutionResult("Failed to open Chrome browser: " + e.getMessage(), false);
+        }
     }
 }

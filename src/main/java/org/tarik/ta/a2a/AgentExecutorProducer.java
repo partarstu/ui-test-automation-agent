@@ -13,11 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tarik.ta.Agent;
 import org.tarik.ta.dto.TestExecutionResult;
-import org.tarik.ta.dto.TestStepResult;
 import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.prompts.TestCaseExtractionPrompt;
 import org.tarik.ta.utils.CommonUtils;
-import org.tarik.ta.utils.ImageUtils;
 
 import java.util.Collection;
 import java.util.LinkedList;
@@ -25,11 +23,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
 import static java.util.Optional.*;
 import static java.util.stream.Collectors.joining;
-import static java.util.stream.Collectors.toMap;
 import static org.tarik.ta.Agent.executeTestCase;
 import static org.tarik.ta.model.ModelFactory.getInstructionModel;
 import static org.tarik.ta.utils.CommonUtils.isBlank;
@@ -46,7 +42,6 @@ public class AgentExecutorProducer {
     }
 
     private record UiAgentExecutor(Agent agent) implements AgentExecutor {
-        // Replaced Semaphore with a single-threaded executor for queuing
         private static final ExecutorService taskExecutor = Executors.newSingleThreadExecutor();
         private static final Logger LOG = LoggerFactory.getLogger(UiAgentExecutor.class);
         private static final Gson GSON = new Gson();

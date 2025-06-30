@@ -17,6 +17,7 @@ package org.tarik.ta.tools;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import org.jetbrains.annotations.NotNull;
 
 import java.awt.event.KeyEvent;
 import java.util.HashMap;
@@ -35,7 +36,7 @@ public class KeyboardTools extends AbstractTools {
     public static ToolExecutionResult pressKey(@P(value = "The specific value of a keyboard key which needs to be pressed, e.g. 'Ctrl', " +
             "'Enter', 'A', '1', 'Shift' etc.") String keyboardKey) {
         if (keyboardKey == null || keyboardKey.isBlank()) {
-            return new ToolExecutionResult(ERROR, "%s: In order to press a keyboard key it can't be empty"
+            return getFailedToolExecutionResult("%s: In order to press a keyboard key it can't be empty"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
         }
         int keyCode = getKeyCode(keyboardKey);
@@ -50,7 +51,7 @@ public class KeyboardTools extends AbstractTools {
     public static ToolExecutionResult pressKeys(@P("A non-empty array of values each representing the keyboard key which needs to be " +
             "pressed, e.g. 'Ctrl', 'Enter', 'A', '1', 'Shift' etc.") String... keyboardKeys) {
         if (keyboardKeys == null || keyboardKeys.length == 0) {
-            return new ToolExecutionResult(ERROR, "%s: In order to press keyboard keys combination it can't be empty"
+            return getFailedToolExecutionResult("%s: In order to press keyboard keys combination it can't be empty"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
         }
         stream(keyboardKeys).map(KeyboardTools::getKeyCode).forEach(robot::keyPress);
@@ -59,12 +60,11 @@ public class KeyboardTools extends AbstractTools {
         return getSuccessfulResult(message);
     }
 
-
     @Tool(value = "Types the specified text using the keyboard.")
     public static ToolExecutionResult typeText(@P("The text to be typed.") String text) {
         if (text == null) {
-            return new ToolExecutionResult(ERROR,
-                    "%s: Text which needs to be input can't be NULL".formatted(KeyboardTools.class.getSimpleName()), true);
+            return getFailedToolExecutionResult( "%s: Text which needs to be input can't be NULL"
+                    .formatted(KeyboardTools.class.getSimpleName()), true);
         }
 
         for (char ch : text.toCharArray()) {

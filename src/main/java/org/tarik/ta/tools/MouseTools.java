@@ -143,9 +143,9 @@ public class MouseTools extends AbstractTools {
                                     .formatted(mouseLocation, xOffset, yOffset);
                             return getSuccessfulResult(message);
                         })
-                        .orElseGet(() -> new ToolExecutionResult(ERROR, "'%s' is not a valid integer value for the 'yOffset' variable"
+                        .orElseGet(() -> getFailedToolExecutionResult("'%s' is not a valid integer value for the 'yOffset' variable"
                                 .formatted(yOffset), true)))
-                .orElseGet(() -> new ToolExecutionResult(ERROR, "'%s' is not a valid integer value for the 'xOffset' variable"
+                .orElseGet(() -> getFailedToolExecutionResult("'%s' is not a valid integer value for the 'xOffset' variable"
                         .formatted(xOffset), true));
     }
 

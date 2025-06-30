@@ -33,15 +33,14 @@ import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.helper_entities.TestStep;
 import org.tarik.ta.model.GenAiModel;
 import org.tarik.ta.prompts.ActionExecutionPrompt;
+import org.tarik.ta.prompts.PreconditionVerificationPrompt;
 import org.tarik.ta.prompts.VerificationExecutionPrompt;
 import org.tarik.ta.tools.AbstractTools.ToolExecutionResult;
 import org.tarik.ta.tools.AbstractTools.ToolExecutionStatus;
 import org.tarik.ta.tools.CommonTools;
 import org.tarik.ta.tools.KeyboardTools;
 import org.tarik.ta.tools.MouseTools;
-import org.tarik.ta.utils.ImageUtils;
 
-import java.awt.image.BufferedImage;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -76,6 +75,7 @@ public class Agent {
     private static final int ERROR_STATUS = 1;
     private static final String ACTION_EXECUTION = "action execution";
     private static final String VERIFICATION_EXECUTION = "verification execution";
+    private static final String PRECONDITION_VALIDATION = "precondition validation";
 
     public static void main(String[] args) {
         if (args.length == 0) {
@@ -100,6 +100,18 @@ public class Agent {
 
     public static TestExecutionResult executeTestCase(TestCase testCase) {
         List<TestStepResult> stepResults = new ArrayList<>();
+
+        if (isNotBlank(testCase.preconditions())) {
+            LOG.info("Verifying preconditions for test case: {}", testCase.name());
+            var preconditionResult = processPreconditionVerificationRequest(testCase.preconditions());
+            if (!preconditionResult.success()) {
+                var errorMessage = "Precondition verification failed: %s".formatted(preconditionResult.message());
+                LOG.error(errorMessage);
+                return new TestExecutionResult(testCase.name(), FAILED, stepResults);
+            }
+            LOG.info("Preconditions met for test case: {}", testCase.name());
+        }
+
         for (TestStep testStep : testCase.testSteps()) {
             var actionInstruction = testStep.stepDescription();
             var verificationInstruction = testStep.expectedResults();
@@ -219,6 +231,37 @@ public class Agent {
                     retryActive = now().isBefore(deadline);
                     if (retryActive) {
                         LOG.info("Verification failed, retrying within configured deadline.");
+                        var nextRetryMoment = getNextRetryMoment();
+                        if (nextRetryMoment.isBefore(deadline)) {
+                            waitUntil(nextRetryMoment);
+                        }
+                    }
+                }
+            } while (retryActive);
+        }
+
+        return result;
+    }
+
+    private static VerificationExecutionResult processPreconditionVerificationRequest(String precondition) {
+        var prompt = PreconditionVerificationPrompt.builder()
+                .withPreconditionDescription(precondition)
+                .screenshot(captureScreen())
+                .build();
+        var deadline = now().plusMillis(VERIFICATION_RETRY_TIMEOUT_MILLIS);
+        VerificationExecutionResult result;
+        boolean retryActive;
+        try (var model = getVerificationExecutionModel()) {
+            do {
+                LOG.info("Checking if precondition is met: '{}'", precondition);
+                result = model.generateAndGetResponseAsObject(prompt, PRECONDITION_VALIDATION);
+                LOG.info("Result of precondition validation '{}' : <{}>", precondition, result);
+                if (result.success()) {
+                    return result;
+                } else {
+                    retryActive = now().isBefore(deadline);
+                    if (retryActive) {
+                        LOG.info("Precondition verification failed, retrying within configured deadline.");
                         var nextRetryMoment = getNextRetryMoment();
                         if (nextRetryMoment.isBefore(deadline)) {
                             waitUntil(nextRetryMoment);

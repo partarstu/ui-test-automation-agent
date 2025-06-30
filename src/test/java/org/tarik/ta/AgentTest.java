@@ -147,7 +147,7 @@ class AgentTest {
     void singleStepActionAndVerificationSuccess() {
         // Given
         TestStep step = new TestStep("Perform Action", null, "Verify Result");
-        TestCase testCase = new TestCase("Single Step Success", List.of(step));
+        TestCase testCase = new TestCase("Single Step Success", null, List.of(step));
 
         // When
         TestExecutionResult result = Agent.executeTestCase(testCase);
@@ -169,7 +169,7 @@ class AgentTest {
     void singleStepActionOnlySuccess() {
         // Given
         TestStep step = new TestStep("Perform Action Only", null, null);
-        TestCase testCase = new TestCase("Single Action Only", List.of(step));
+        TestCase testCase = new TestCase("Single Action Only", null, List.of(step));
 
         // When
         TestExecutionResult result = Agent.executeTestCase(testCase);
@@ -192,7 +192,7 @@ class AgentTest {
         // Given
         TestStep step1 = new TestStep("Action 1", null, "Verify 1");
         TestStep step2 = new TestStep("Action 2", List.of("data"), "Verify 2"); // With test data
-        TestCase testCase = new TestCase("Multi-Step Success", List.of(step1, step2));
+        TestCase testCase = new TestCase("Multi-Step Success", null, List.of(step1, step2));
         commonToolsMockedStatic.when(() -> waitSeconds(eq("1")))
                 .thenReturn(new ToolExecutionResult(SUCCESS, "Wait 1 OK", false))
                 .thenReturn(new ToolExecutionResult(SUCCESS, "Wait 2 OK", false));
@@ -222,7 +222,7 @@ class AgentTest {
         // Given
         List<String> testData = List.of("input1", "input2");
         TestStep step = new TestStep("Action With Data", testData, "Verify Data Action");
-        TestCase testCase = new TestCase("Action Data Success", List.of(step));
+        TestCase testCase = new TestCase("Action Data Success", null, List.of(step));
         String expectedInstructionFragment = "using following input data: 'input1', 'input2'";
         ArgumentCaptor<ActionExecutionPrompt> promptCaptor = forClass(ActionExecutionPrompt.class);
 
