@@ -247,7 +247,7 @@ class AgentTest {
         // Given
         String verification = "Fail Verification";
         TestStep step = new TestStep("Action", null, verification);
-        TestCase testCase = new TestCase("Verification Fail", List.of(step));
+        TestCase testCase = new TestCase("Verification Fail", null, List.of(step));
         String failMsg = "Verification failed";
         when(mockModel.generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), eq("verification execution")))
                 .thenReturn(new VerificationExecutionResult(false, failMsg));
@@ -276,7 +276,7 @@ class AgentTest {
         // Given
         String action = "Fail Action";
         TestStep step = new TestStep(action, null, "Verify");
-        TestCase testCase = new TestCase("Action Fail Non-Retry", List.of(step));
+        TestCase testCase = new TestCase("Action Fail Non-Retry", null, List.of(step));
         String failMsg = "Permanent tool failure";
         commonToolsMockedStatic.when(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)))
                 .thenReturn(new ToolExecutionResult(ERROR, failMsg, false));
@@ -304,7 +304,7 @@ class AgentTest {
         // Given
         String action = "Exception Action";
         TestStep step = new TestStep(action, null, "Verify");
-        TestCase testCase = new TestCase("Tool Exception Case", List.of(step));
+        TestCase testCase = new TestCase("Tool Exception Case", null, List.of(step));
         RuntimeException toolException = new RuntimeException("Tool exploded as expected");
         commonToolsMockedStatic.when(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS))).thenThrow(toolException);
 
@@ -332,7 +332,7 @@ class AgentTest {
         // Given
         String action = "Invalid Tool Action";
         TestStep step = new TestStep(action, null, "Verify");
-        TestCase testCase = new TestCase("Invalid Tool Case", List.of(step));
+        TestCase testCase = new TestCase("Invalid Tool Case", null, List.of(step));
         String invalidToolName = "nonExistentTool";
         var invalidRequest = ToolExecutionRequest.builder()
                 .id(MOCK_TOOL_ID)
@@ -364,7 +364,7 @@ class AgentTest {
         // Given
         String action = "Invalid Args Action";
         TestStep step = new TestStep(action, null, "Verify");
-        TestCase testCase = new TestCase("Invalid Args Case", List.of(step));
+        TestCase testCase = new TestCase("Invalid Args Case", null, List.of(step));
         String invalidJson = "this is not json";
         ToolExecutionRequest invalidArgsRequest = ToolExecutionRequest.builder()
                 .id(MOCK_TOOL_ID)
@@ -393,7 +393,7 @@ class AgentTest {
     void processVerificationRequestRetriesAndSucceeds() {
         // Given
         TestStep step = new TestStep("Action", null, "Verify Retry");
-        TestCase testCase = new TestCase("Verify Retry Success", List.of(step));
+        TestCase testCase = new TestCase("Verify Retry Success", null, List.of(step));
         String successMsg = "Verification finally OK";
         String failMsg = "Verification not ready";
         commonToolsMockedStatic.when(() -> waitSeconds(eq("1")))

@@ -21,10 +21,13 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static java.lang.Thread.currentThread;
 import static java.util.Optional.*;
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static java.util.stream.Collectors.joining;
 import static org.tarik.ta.Agent.executeTestCase;
 import static org.tarik.ta.model.ModelFactory.getInstructionModel;
@@ -42,7 +45,7 @@ public class AgentExecutorProducer {
     }
 
     private record UiAgentExecutor(Agent agent) implements AgentExecutor {
-        private static final ExecutorService taskExecutor = Executors.newSingleThreadExecutor();
+        private static final ExecutorService taskExecutor = newSingleThreadExecutor();
         private static final Logger LOG = LoggerFactory.getLogger(UiAgentExecutor.class);
         private static final Gson GSON = new Gson();
 
@@ -55,30 +58,40 @@ public class AgentExecutorProducer {
             }
 
             LOG.info("Received test case execution request. Submitting to the execution queue.");
-            taskExecutor.submit(() -> {
-                var taskId = context.getTaskId();
-                LOG.info("Starting task {} from the queue.", taskId);
-                try {
-                    updater.startWork();
-                    extractTextFromMessage(context.getMessage()).ifPresentOrElse(userMessage ->
-                                    parseTestCaseFromRequest(userMessage).ifPresentOrElse(requestedTestCase ->
-                                                    requestTestCaseExecution(requestedTestCase, updater),
-                                            () -> {
-                                                var message = "Request for test case execution either contained no valid test case or " +
-                                                        "insufficient information in order to execute it.";
-                                                LOG.error(message);
-                                                failTask(updater, message);
-                                            }),
-                            () -> {
-                                var message = "Request for test case execution was empty.";
-                                LOG.error(message);
-                                failTask(updater, message);
-                            });
-                } catch (Exception e) {
-                    LOG.error("Error while processing test case execution request for task {}", taskId, e);
-                    failTask(updater, "Couldn't start the task %s".formatted(taskId));
-                }
-            });
+            try {
+                // Only a single execution may be running at a time
+                taskExecutor.submit(() -> {
+                    var taskId = context.getTaskId();
+                    LOG.info("Starting task {} from the queue.", taskId);
+                    try {
+                        updater.startWork();
+                        extractTextFromMessage(context.getMessage()).ifPresentOrElse(userMessage ->
+                                        parseTestCaseFromRequest(userMessage).ifPresentOrElse(requestedTestCase ->
+                                                        requestTestCaseExecution(requestedTestCase, updater),
+                                                () -> {
+                                                    var message = "Request for test case execution either contained no valid test case or " +
+                                                            "insufficient information in order to execute it.";
+                                                    LOG.error(message);
+                                                    failTask(updater, message);
+                                                }),
+                                () -> {
+                                    var message = "Request for test case execution was empty.";
+                                    LOG.error(message);
+                                    failTask(updater, message);
+                                });
+                    } catch (Exception e) {
+                        LOG.error("Error while processing test case execution request for task {}", taskId, e);
+                        failTask(updater, "Couldn't start the task %s".formatted(taskId));
+                    }
+                }).get();
+            } catch (InterruptedException e) {
+                currentThread().interrupt();
+                LOG.error("Task execution was interrupted.", e);
+                failTask(updater, "Task execution was interrupted.");
+            } catch (ExecutionException e) {
+                LOG.error("Error during task execution.", e.getCause());
+                failTask(updater, "Error during task execution: %s".formatted(e.getCause().getMessage()));
+            }
         }
 
         private void requestTestCaseExecution(TestCase requestedTestCase, TaskUpdater updater) {
