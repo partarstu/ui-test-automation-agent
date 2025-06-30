@@ -22,10 +22,13 @@ import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import org.tarik.ta.annotations.JsonClassDescription;
+import org.tarik.ta.annotations.JsonFieldDescription;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Optional.ofNullable;
 import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 
 public class ModelUtils {
@@ -52,7 +55,14 @@ public class ModelUtils {
     public static <T> String getJsonSchemaDescription(Class<T> clazz) {
         try {
             JsonSchema schema = JSON_SCHEMA_GENERATOR.generateSchema(clazz);
-            return OBJECT_MAPPER.writeValueAsString(schema);
+            ofNullable(clazz.getAnnotation(JsonClassDescription.class))
+                    .map(JsonClassDescription::value)
+                    .ifPresent(schema::setDescription);
+
+            applyFieldDescriptionsRecursively(schema, clazz);
+            String schemaString = OBJECT_MAPPER.writeValueAsString(schema);
+            schemaString = schemaString.replaceAll("\"id\":\\s*\"[^\"]*\",?", "");
+            return schemaString;
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
@@ -65,10 +75,30 @@ public class ModelUtils {
     }
 
     private static String getClassDescriptionForPrompt(Class<?> objectClass) {
-        return Optional.ofNullable(objectClass.getAnnotation(JsonClassDescription.class))
+        return ofNullable(objectClass.getAnnotation(JsonClassDescription.class))
                 .map(JsonClassDescription::value)
                 .orElseThrow(() -> new IllegalStateException(("The class %s has no @JsonClassDescription annotation needed for its " +
                         "purpose description in the prompt").formatted(objectClass.getSimpleName())));
+    }
+
+    private static void applyFieldDescriptionsRecursively(JsonSchema schema, Class<?> clazz) {
+        if (schema.isObjectSchema()) {
+            for (Field field : clazz.getDeclaredFields()) {
+                ofNullable(field.getAnnotation(JsonFieldDescription.class))
+                        .map(JsonFieldDescription::value)
+                        .ifPresent(description -> {
+                            if (schema.asObjectSchema().getProperties() != null) {
+                                JsonSchema propertySchema = schema.asObjectSchema().getProperties().get(field.getName());
+                                if (propertySchema != null) {
+                                    propertySchema.setDescription(description);
+                                    if (propertySchema.isObjectSchema()) {
+                                        applyFieldDescriptionsRecursively(propertySchema, field.getType());
+                                    }
+                                }
+                            }
+                        });
+            }
+        }
     }
 
     private static ObjectMapper createObjectMapper() {
@@ -79,4 +109,3 @@ public class ModelUtils {
     }
 
 }
-
