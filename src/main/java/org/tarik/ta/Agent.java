@@ -88,7 +88,7 @@ public class Agent {
             TestExecutionResult result = executeTestCase(testCase);
             LOG.info("Finished Agent execution for test case: {}", testCase.name());
             System.out.println(result);
-            if (result.testExecutionStatus()!= PASSED) {
+            if (result.getTestExecutionStatus() != PASSED) {
                 exit(ERROR_STATUS);
             }
         }, () -> {
@@ -99,15 +99,16 @@ public class Agent {
     }
 
     public static TestExecutionResult executeTestCase(TestCase testCase) {
+        var testExecutionStartTimestamp = now();
         List<TestStepResult> stepResults = new ArrayList<>();
 
         if (isNotBlank(testCase.preconditions())) {
             LOG.info("Verifying preconditions for test case: {}", testCase.name());
             var preconditionResult = processPreconditionVerificationRequest(testCase.preconditions());
             if (!preconditionResult.success()) {
-                var errorMessage = "Precondition verification failed: %s".formatted(preconditionResult.message());
+                var errorMessage = "Preconditions not met. %s".formatted(preconditionResult.message());
                 LOG.error(errorMessage);
-                return new TestExecutionResult(testCase.name(), FAILED, stepResults);
+                return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp, now());
             }
             LOG.info("Preconditions met for test case: {}", testCase.name());
         }
@@ -123,12 +124,14 @@ public class Agent {
             }
 
             try {
+                var executionStartTimestamp = now();
                 var actionResult = processActionRequest(actionInstructionWithData);
                 if (!actionResult.success()) {
                     var errorMessage = "Failure while executing action '%s'. Root cause: %s."
                             .formatted(actionInstructionWithData, actionResult.message());
-                    addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, null);
-                    return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults);
+                    addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, null, executionStartTimestamp, now());
+                    return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null,
+                            testExecutionStartTimestamp, now());
                 }
                 String actualResult = null;
 
@@ -139,26 +142,30 @@ public class Agent {
                     if (!verificationResult.success()) {
                         var errorMessage = "Verifying that '%s' failed. %s."
                                 .formatted(verificationInstruction, verificationResult.message());
-                        addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, verificationResult.message());
-                        return new TestExecutionResult(testCase.name(), FAILED, stepResults);
+                        addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, verificationResult.message(),
+                                executionStartTimestamp, now());
+                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, null, testExecutionStartTimestamp, now());
                     }
                     actualResult = verificationResult.message();
                 }
 
-                stepResults.add(new TestStepResult(testStep, true, null, actualResult, null));
+                stepResults.add(new TestStepResult(testStep, true, null, actualResult, null, executionStartTimestamp, now()));
             } catch (Exception e) {
                 LOG.error("Unexpected error while executing the test step: '{}'", testStep.stepDescription(), e);
-                addFailedTestStepWithScreenshot(testStep, stepResults, e.getMessage(), null);
-                return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults);
+                addFailedTestStepWithScreenshot(testStep, stepResults, e.getMessage(), null, now(), now());
+                return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null, testExecutionStartTimestamp,
+                        now());
             }
         }
-        return new TestExecutionResult(testCase.name(), PASSED, stepResults);
+        return new TestExecutionResult(testCase.name(), PASSED, stepResults, captureScreen(), testExecutionStartTimestamp, now());
     }
 
     private static void addFailedTestStepWithScreenshot(TestStep testStep, List<TestStepResult> stepResults, String errorMessage,
-                                                        String actualResult) {
+                                                        String actualResult, Instant executionStartTimestamp,
+                                                        Instant executionEndTimestamp) {
         var screenshot = captureScreen();
-        stepResults.add(new TestStepResult(testStep, false, errorMessage, actualResult, screenshot));
+        stepResults.add(new TestStepResult(testStep, false, errorMessage, actualResult, screenshot, executionStartTimestamp,
+                executionEndTimestamp));
     }
 
     private static ActionExecutionResult processActionRequest(String action) {

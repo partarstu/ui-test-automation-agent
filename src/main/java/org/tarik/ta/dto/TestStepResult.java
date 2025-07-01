@@ -20,6 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import org.tarik.ta.helper_entities.TestStep;
 
 import java.awt.image.BufferedImage;
+import java.time.Instant;
 import java.util.Objects;
 
 /**
@@ -30,26 +31,36 @@ public final class TestStepResult {
     private final boolean success;
     private final @Nullable String errorMessage;
     private final @Nullable String actualResult;
-    private final @Nullable transient BufferedImage screenshot;
+    private final @Nullable
+    transient BufferedImage screenshot;
+    private final @Nullable Instant executionStartTimestamp;
+    private final @Nullable Instant executionEndTimestamp;
 
     /**
-     * @param testStep     The test step that was executed.
-     * @param success      True if the step executed successfully, false otherwise.
-     * @param errorMessage A descriptive error message if the step failed, otherwise null.
-     * @param screenshot   A screenshot taken at the end of the step, can be null.
+     * @param testStep                The test step that was executed.
+     * @param success                 True if the step executed successfully, false otherwise.
+     * @param errorMessage            A descriptive error message if the step failed, otherwise null.
+     * @param actualResult            The actual result of the test step execution.
+     * @param screenshot              A screenshot taken at the end of the step, can be null.
+     * @param executionStartTimestamp The timestamp when the test step execution started.
+     * @param executionEndTimestamp   The timestamp when the test step execution ended.
      */
     public TestStepResult(
             @NotNull TestStep testStep,
             boolean success,
             @Nullable String errorMessage,
             @Nullable String actualResult,
-            @Nullable BufferedImage screenshot
+            @Nullable BufferedImage screenshot,
+            @Nullable Instant executionStartTimestamp,
+            @Nullable Instant executionEndTimestamp
     ) {
         this.testStep = testStep;
         this.success = success;
         this.errorMessage = errorMessage;
         this.actualResult = actualResult;
         this.screenshot = screenshot;
+        this.executionStartTimestamp = executionStartTimestamp;
+        this.executionEndTimestamp = executionEndTimestamp;
     }
 
     /**
@@ -70,7 +81,10 @@ public final class TestStepResult {
         }
 
         boolean screenshotExists = screenshot != null;
-        sb.append("  - Screenshot: ").append(screenshotExists ? "Available" : "Not Available");
+        sb.append("  - Screenshot: ").append(screenshotExists ? "Available" : "Not Available").append("\n");
+        sb.append("  - Start Time: ").append(executionStartTimestamp != null ? executionStartTimestamp.toString() : "N/A")
+                .append("\n");
+        sb.append("  - End Time: ").append(executionEndTimestamp != null ? executionEndTimestamp.toString() : "N/A");
 
         return sb.toString();
     }
@@ -95,6 +109,14 @@ public final class TestStepResult {
         return screenshot;
     }
 
+    public @Nullable Instant getExecutionStartTimestamp() {
+        return executionStartTimestamp;
+    }
+
+    public @Nullable Instant getExecutionEndTimestamp() {
+        return executionEndTimestamp;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (obj == this) {
@@ -108,12 +130,14 @@ public final class TestStepResult {
                 this.success == that.success &&
                 Objects.equals(this.errorMessage, that.errorMessage) &&
                 Objects.equals(this.actualResult, that.actualResult) &&
-                Objects.equals(this.screenshot, that.screenshot);
+                Objects.equals(this.screenshot, that.screenshot) &&
+                Objects.equals(this.executionStartTimestamp, that.executionStartTimestamp) &&
+                Objects.equals(this.executionEndTimestamp, that.executionEndTimestamp);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(testStep, success, errorMessage, actualResult, screenshot);
+        return Objects.hash(testStep, success, errorMessage, actualResult, screenshot, executionStartTimestamp, executionEndTimestamp);
     }
 
 }

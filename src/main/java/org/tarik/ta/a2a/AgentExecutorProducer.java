@@ -1,6 +1,7 @@
 package org.tarik.ta.a2a;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import io.a2a.server.agentexecution.AgentExecutor;
 import io.a2a.server.agentexecution.RequestContext;
 import io.a2a.server.events.EventQueue;
@@ -9,6 +10,7 @@ import io.a2a.spec.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tarik.ta.Agent;
@@ -16,14 +18,16 @@ import org.tarik.ta.dto.TestExecutionResult;
 import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.prompts.TestCaseExtractionPrompt;
 import org.tarik.ta.utils.CommonUtils;
+import org.tarik.ta.utils.InstantAdapter;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import static java.lang.Thread.currentThread;
 import static java.util.Optional.*;
@@ -47,8 +51,9 @@ public class AgentExecutorProducer {
     private record UiAgentExecutor(Agent agent) implements AgentExecutor {
         private static final ExecutorService taskExecutor = newSingleThreadExecutor();
         private static final Logger LOG = LoggerFactory.getLogger(UiAgentExecutor.class);
-        private static final Gson GSON = new Gson();
-
+        private static final Gson GSON = new GsonBuilder()
+                .registerTypeAdapter(Instant.class, new InstantAdapter())
+                .create();
 
         @Override
         public void execute(RequestContext context, EventQueue eventQueue) throws JSONRPCError {
@@ -96,25 +101,38 @@ public class AgentExecutorProducer {
 
         private void requestTestCaseExecution(TestCase requestedTestCase, TaskUpdater updater) {
             String testCaseName = requestedTestCase.name();
+            getTestExecutionResult(requestedTestCase, updater, testCaseName).ifPresent(result -> {
+                try {
+                    List<Part<?>> parts = new LinkedList<>();
+                    TextPart textPart = new TextPart(GSON.toJson(result), null);
+                    parts.add(textPart);
+                    addScreenshots(result, parts);
+                    updater.addArtifact(parts, null, null, null);
+                    updater.complete();
+                } catch (Exception e) {
+                    LOG.error("Got exception while preparing the task artifacts for the test case '{}'", testCaseName, e);
+                    failTask(updater, "Got exception while preparing the task artifacts for the test case. " +
+                            "Before re-sending please investigate the root cause based on the agent's logs.");
+                }
+            });
+        }
+
+        private Optional<TestExecutionResult> getTestExecutionResult(TestCase requestedTestCase, TaskUpdater updater, String testCaseName) {
             try {
                 LOG.info("Starting execution of the test case '{}'", testCaseName);
-                var result = executeTestCase(requestedTestCase);
+                TestExecutionResult result = executeTestCase(requestedTestCase);
                 LOG.info("Finished execution of the test case '{}'", testCaseName);
-                List<Part<?>> parts = new LinkedList<>();
-                TextPart textPart = new TextPart(GSON.toJson(result), null);
-                parts.add(textPart);
-                addScreenshots(result, parts);
-                updater.addArtifact(parts, null, null, null);
-                updater.complete();
+                return of(result);
             } catch (Exception e) {
                 LOG.error("Got exception during the execution of the test case '{}'", testCaseName, e);
-                failTask(updater, "Got exception while executing the test case. " +
+                failTask(updater, "Got exception while executing the test case, no results available. " +
                         "Before re-sending please investigate the root cause based on the agent's logs.");
+                return empty();
             }
         }
 
         private static void addScreenshots(TestExecutionResult result, List<Part<?>> parts) {
-            result.stepResults().stream()
+            result.getStepResults().stream()
                     .filter(r -> r.getScreenshot() != null)
                     .map(r -> new FileWithBytes(
                             "image/png",
@@ -123,6 +141,10 @@ public class AgentExecutorProducer {
                     )
                     .map(FilePart::new)
                     .forEach(parts::add);
+            ofNullable(result.getScreenshot()).ifPresent(screenshot ->
+                    parts.add(new FilePart(new FileWithBytes("image/png",
+                            "General screenshot for the test case %s".formatted(result.getTestCaseName()),
+                            convertImageToBase64(screenshot, "png")))));
         }
 
         private static void failTask(TaskUpdater updater, String message) {
@@ -151,7 +173,7 @@ public class AgentExecutorProducer {
             String result = ofNullable(message.getParts())
                     .stream()
                     .flatMap(Collection::stream)
-                    .filter(p->p instanceof TextPart)
+                    .filter(p -> p instanceof TextPart)
                     .map(part -> ((TextPart) part).getText())
                     .filter(CommonUtils::isNotBlank)
                     .map(String::trim)
