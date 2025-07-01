@@ -33,6 +33,7 @@ public final class TestExecutionResult {
     private final transient BufferedImage screenshot;
     private final @Nullable Instant executionStartTimestamp;
     private final @Nullable Instant executionEndTimestamp;
+    private final @Nullable String generalErrorMessage;
 
     /**
      * @param testCaseName        The test step that was executed.
@@ -41,15 +42,24 @@ public final class TestExecutionResult {
      * @param screenshot          The screenshot of the screen at the time of test execution.
      * @param executionStartTimestamp The timestamp when the test execution started.
      * @param executionEndTimestamp   The timestamp when the test execution ended.
+     * @param generalErrorMessage The error message if something happens before any step execution starts, e.g. preconditions fail.
      */
-    public TestExecutionResult(String testCaseName, TestExecutionStatus testExecutionStatus, @NotNull List<TestStepResult> stepResults,
-                               BufferedImage screenshot, @Nullable Instant executionStartTimestamp, @Nullable Instant executionEndTimestamp) {
+    public TestExecutionResult(
+            @NotNull String testCaseName,
+            @NotNull TestExecutionStatus testExecutionStatus,
+            @NotNull List<TestStepResult> stepResults,
+            @Nullable BufferedImage screenshot,
+            @Nullable Instant executionStartTimestamp,
+            @Nullable Instant executionEndTimestamp,
+            @Nullable String generalErrorMessage
+    ) {
         this.testCaseName = testCaseName;
         this.testExecutionStatus = testExecutionStatus;
         this.stepResults = stepResults;
         this.screenshot = screenshot;
         this.executionStartTimestamp = executionStartTimestamp;
         this.executionEndTimestamp = executionEndTimestamp;
+        this.generalErrorMessage = generalErrorMessage;
     }
 
     public enum TestExecutionStatus {
@@ -62,6 +72,9 @@ public final class TestExecutionResult {
         sb.append("============================================================\n");
         sb.append("Test Case: ").append(testCaseName).append("\n");
         sb.append("Execution Result: ").append(testExecutionStatus).append("\n");
+        if (generalErrorMessage != null && !generalErrorMessage.isBlank()) {
+            sb.append("Error Message: ").append(generalErrorMessage).append("\n");
+        }
         sb.append("Start Time: ").append(executionStartTimestamp != null ? executionStartTimestamp.toString() : "N/A").append("\n");
         sb.append("End Time: ").append(executionEndTimestamp != null ? executionEndTimestamp.toString() : "N/A").append("\n");
         sb.append("============================================================\n");
@@ -114,12 +127,13 @@ public final class TestExecutionResult {
                 Objects.equals(this.stepResults, that.stepResults) &&
                 Objects.equals(this.screenshot, that.screenshot) &&
                 Objects.equals(this.executionStartTimestamp, that.executionStartTimestamp) &&
-                Objects.equals(this.executionEndTimestamp, that.executionEndTimestamp);
+                Objects.equals(this.executionEndTimestamp, that.executionEndTimestamp) &&
+                Objects.equals(this.generalErrorMessage, that.generalErrorMessage);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(testCaseName, testExecutionStatus, stepResults, screenshot, executionStartTimestamp, executionEndTimestamp);
+        return Objects.hash(testCaseName, testExecutionStatus, stepResults, screenshot, executionStartTimestamp, executionEndTimestamp, generalErrorMessage);
     }
 
     public @Nullable Instant getExecutionStartTimestamp() {
@@ -128,5 +142,9 @@ public final class TestExecutionResult {
 
     public @Nullable Instant getExecutionEndTimestamp() {
         return executionEndTimestamp;
+    }
+
+    public @Nullable String getGeneralErrorMessage() {
+        return generalErrorMessage;
     }
 }

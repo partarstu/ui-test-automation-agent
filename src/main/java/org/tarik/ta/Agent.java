@@ -108,7 +108,7 @@ public class Agent {
             if (!preconditionResult.success()) {
                 var errorMessage = "Preconditions not met. %s".formatted(preconditionResult.message());
                 LOG.error(errorMessage);
-                return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp, now());
+                return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp, now(), errorMessage);
             }
             LOG.info("Preconditions met for test case: {}", testCase.name());
         }
@@ -131,7 +131,7 @@ public class Agent {
                             .formatted(actionInstructionWithData, actionResult.message());
                     addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, null, executionStartTimestamp, now());
                     return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null,
-                            testExecutionStartTimestamp, now());
+                            testExecutionStartTimestamp, now(), errorMessage);
                 }
                 String actualResult = null;
 
@@ -144,7 +144,7 @@ public class Agent {
                                 .formatted(verificationInstruction, verificationResult.message());
                         addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, verificationResult.message(),
                                 executionStartTimestamp, now());
-                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, null, testExecutionStartTimestamp, now());
+                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, null, testExecutionStartTimestamp, now(), errorMessage);
                     }
                     actualResult = verificationResult.message();
                 }
@@ -154,10 +154,10 @@ public class Agent {
                 LOG.error("Unexpected error while executing the test step: '{}'", testStep.stepDescription(), e);
                 addFailedTestStepWithScreenshot(testStep, stepResults, e.getMessage(), null, now(), now());
                 return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null, testExecutionStartTimestamp,
-                        now());
+                        now(), e.getMessage());
             }
         }
-        return new TestExecutionResult(testCase.name(), PASSED, stepResults, captureScreen(), testExecutionStartTimestamp, now());
+        return new TestExecutionResult(testCase.name(), PASSED, stepResults, captureScreen(), testExecutionStartTimestamp, now(), null);
     }
 
     private static void addFailedTestStepWithScreenshot(TestStep testStep, List<TestStepResult> stepResults, String errorMessage,
