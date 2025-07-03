@@ -35,33 +35,10 @@
         <opencv.version>4.10.0-1.5.11</opencv.version>
         <openblas.version>0.3.28-1.5.11</openblas.version>
         <a2a.sdk.version>0.2.4-SNAPSHOT</a2a.sdk.version>
-        <!--<quarkus.platform.version>3.22.3</quarkus.platform.version>-->
         <main.class/>
     </properties>
 
-    <dependencyManagement>
-        <!--<dependencies>
-            <dependency>
-                <groupId>io.quarkus</groupId>
-                <artifactId>quarkus-bom</artifactId>
-                <version>${quarkus.platform.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>-->
-    </dependencyManagement>
-
     <dependencies>
-       <!-- <dependency>
-            <groupId>io.a2a.sdk</groupId>
-            <artifactId>a2a-java-sdk-server-quarkus</artifactId>
-            <version>${a2a.sdk.version}</version>
-        </dependency>-->
-        <dependency>
-            <groupId>io.a2a.sdk</groupId>
-            <artifactId>a2a-java-sdk-core</artifactId>
-            <version>${a2a.sdk.version}</version>
-        </dependency>
         <dependency>
             <groupId>io.a2a.sdk</groupId>
             <artifactId>a2a-java-sdk-server-jakarta</artifactId>
@@ -166,11 +143,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <!--<dependency>
-            <groupId>io.quarkiverse.logging.logback</groupId>
-            <artifactId>quarkus-logging-logback</artifactId>
-            <version>1.1.2</version>
-        </dependency>-->
     </dependencies>
     <profiles>
         <profile>
@@ -228,34 +200,14 @@
     </profiles>
     <build>
         <plugins>
-            <!--<plugin>
-                <groupId>io.quarkus</groupId>
-                <artifactId>quarkus-maven-plugin</artifactId>
-                <version>${quarkus.platform.version}</version>
-                &lt;!&ndash;<extensions>true</extensions>&ndash;&gt;
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>build</goal>
-                            <goal>generate-code</goal>
-                            <goal>generate-code-tests</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>-->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven.surefire.plugin.version}</version>
                 <configuration>
-                   <!-- <argLine>
-                        -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
-                        -Xshare:off
-                    </argLine>-->
-                   <!-- <systemPropertyVariables>
-                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
-                        <maven.home>${maven.home}</maven.home>
-                    </systemPropertyVariables>-->
+                    <excludes>
+                        <exclude>**/ManualTest.java</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>

@@ -15,6 +15,8 @@
  */
 package org.tarik.ta.utils;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import org.apache.commons.io.FileUtils;
@@ -33,6 +35,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -59,6 +62,15 @@ public class CommonUtils {
         } catch (JsonSyntaxException e) {
             var message = "Invalid JSON syntax in file: %s".formatted(filePath);
             LOG.error(message, e);
+            return empty();
+        }
+    }
+
+    public static Optional<String> getObjectPrettyPrinted(ObjectMapper mapper, Map<String, String> toolExecutionInfoByToolName) {
+        try {
+            return of(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(toolExecutionInfoByToolName));
+        } catch (JsonProcessingException e) {
+            LOG.error("Couldn't write the provided tool execution info by tool name as a pretty string.", e);
             return empty();
         }
     }

@@ -22,7 +22,6 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tarik.ta.dto.TestExecutionResult;
@@ -37,7 +36,6 @@ import org.tarik.ta.prompts.ActionExecutionPrompt;
 import org.tarik.ta.prompts.PreconditionVerificationPrompt;
 import org.tarik.ta.prompts.VerificationExecutionPrompt;
 import org.tarik.ta.tools.AbstractTools.ToolExecutionResult;
-import org.tarik.ta.tools.AbstractTools.ToolExecutionStatus;
 import org.tarik.ta.tools.CommonTools;
 import org.tarik.ta.tools.KeyboardTools;
 import org.tarik.ta.tools.MouseTools;
@@ -56,7 +54,7 @@ import static dev.langchain4j.agent.tool.ToolSpecifications.toolSpecificationsFr
 import static java.lang.String.join;
 import static java.lang.System.exit;
 import static java.time.Instant.now;
-import static java.util.Optional.ofNullable;
+import static java.util.Optional.*;
 import static java.util.stream.IntStream.range;
 import static org.tarik.ta.AgentConfig.*;
 import static org.tarik.ta.dto.TestExecutionResult.TestExecutionStatus.*;
@@ -173,7 +171,10 @@ public class Agent {
     }
 
     private static ActionExecutionResult processActionRequest(String action) {
-        var prompt = ActionExecutionPrompt.builder().withActionDescription(action).build();
+        var prompt = ActionExecutionPrompt.builder()
+                .withActionDescription(action)
+                .screenshot(captureScreen())
+                .build();
         var deadline = now().plusMillis(TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS);
         LOG.info("Executing action '{}'", action);
         var toolSpecs = allToolsByName.values().stream().map(Tool::toolSpecification).toList();
@@ -182,7 +183,6 @@ public class Agent {
         }
     }
 
-    @Nullable
     private static ActionExecutionResult executeActionRequest(GenAiModel model, ActionExecutionPrompt prompt,
                                                               List<ToolSpecification> toolSpecs, Instant deadline) {
         var message = model.generate(prompt, toolSpecs, ACTION_EXECUTION).aiMessage();
@@ -190,39 +190,55 @@ public class Agent {
             var toolExecutionRequests = message.toolExecutionRequests();
             checkState(toolExecutionRequests != null && !toolExecutionRequests.isEmpty(),
                     "Tools execution requests are empty, but were requested");
-            checkState(toolExecutionRequests.size() == 1,
-                    "Currently the execution only of a single tool is supported, but %s were requested", toolExecutionRequests.size());
-            try {
-                var toolSpecToExecute = toolExecutionRequests.getFirst();
-                var nextRetryMoment = getNextRetryMoment();
-                var toolExecutionResult = executeRequestedTool(toolSpecToExecute);
-                return switch (toolExecutionResult) {
-                    case ToolExecutionResult(ToolExecutionStatus status, String info, boolean _) when status == SUCCESS ->
-                            new ActionExecutionResult(true, info);
-                    case ToolExecutionResult(ToolExecutionStatus _, String info, boolean retryMakesSense) when !retryMakesSense ->
-                            new ActionExecutionResult(false, info);
-                    case ToolExecutionResult(ToolExecutionStatus _, String _, boolean _) when now().isBefore(deadline) -> {
-                        if (nextRetryMoment.isBefore(deadline)) {
-                            waitUntil(getNextRetryMoment());
+            Map<String, String> toolExecutionInfoByToolName = new HashMap<>();
+            for (ToolExecutionRequest toolToExecute : toolExecutionRequests) {
+                while (true) {
+                    try {
+                        var toolExecutionResult = executeRequestedTool(toolToExecute);
+                        if (toolExecutionResult.executionStatus() == SUCCESS) {
+                            toolExecutionInfoByToolName.put(toolToExecute.name(), toolExecutionResult.message());
+                            break;
+                        } else if (!toolExecutionResult.retryMakesSense()) {
+                            LOG.info("Tool execution failed and retry doesn't make sense. Interrupting the execution.");
+                            toolExecutionInfoByToolName.put(toolToExecute.name(), toolExecutionResult.message());
+                            return getFailedActionExecutionResult(toolExecutionInfoByToolName);
+                        } else {
+                            LOG.info("Tool execution wasn't successful, retrying.");
+                            var nextRetryMoment = getNextRetryMoment();
+                            if (nextRetryMoment.isBefore(deadline)) {
+                                waitUntil(nextRetryMoment);
+                            } else {
+                                LOG.warn("Tool execution retries exhausted, interrupting the execution.");
+                                toolExecutionInfoByToolName.put(toolToExecute.name(), toolExecutionResult.message());
+                                return getFailedActionExecutionResult(toolExecutionInfoByToolName);
+                            }
                         }
-                        LOG.info("Tool execution wasn't successful, retrying.");
-                        yield executeActionRequest(model, prompt, toolSpecs, deadline);
+                    } catch (Exception e) {
+                        LOG.error("Got exception while invoking requested tools:", e);
+                        toolExecutionInfoByToolName.put(toolToExecute.name(), e.getLocalizedMessage());
+                        return getFailedActionExecutionResult(toolExecutionInfoByToolName);
                     }
-                    case ToolExecutionResult(ToolExecutionStatus _, String info, _) -> {
-                        LOG.info("Tool execution retries exhausted, interrupting the execution.");
-                        yield new ActionExecutionResult(false, info);
-                    }
-                };
-            } catch (Exception e) {
-                LOG.error("Got exception while invoking requested tools:", e);
-                return new ActionExecutionResult(false, e.getLocalizedMessage());
+                }
             }
+            return new ActionExecutionResult(true, getToolExecutionDetails(toolExecutionInfoByToolName));
         } else {
-            var errorMessage = "Tools were not used but any action execution requires tools. Model response: " + message.text();
+            var errorMessage = "Tools were not requested by the model, but any action execution requires tools. " +
+                            "Model response: " + message.text();
             LOG.error(errorMessage);
             return new ActionExecutionResult(false, errorMessage);
         }
     }
+
+    @NotNull
+    private static ActionExecutionResult getFailedActionExecutionResult(Map<String, String> toolExecutionInfoByToolName) {
+        return new ActionExecutionResult(false, getToolExecutionDetails(toolExecutionInfoByToolName));
+    }
+
+    @NotNull
+    private static String getToolExecutionDetails(Map<String, String> toolExecutionInfoByToolName) {
+        return getObjectPrettyPrinted(OBJECT_MAPPER, toolExecutionInfoByToolName).orElse("None");
+    }
+
 
     private static VerificationExecutionResult processVerificationRequest(String verification) {
         var prompt = VerificationExecutionPrompt.builder()
