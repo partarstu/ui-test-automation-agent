@@ -62,6 +62,10 @@ public class AgentConfig {
         return loadPropertyAsInteger("port", "PORT", "7070");
     }
 
+    public static String getHost() {
+        return getRequiredProperty("host", "AGENT_HOST");
+    }
+
     public static boolean isTestMode() {
         return Boolean.parseBoolean(getProperty("test.mode", "TEST_MODE", "false"));
     }

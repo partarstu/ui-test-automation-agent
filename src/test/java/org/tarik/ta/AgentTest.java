@@ -274,7 +274,7 @@ class AgentTest {
         assertThat(result.getStepResults()).hasSize(1);
         TestStepResult stepResult = result.getStepResults().getFirst();
         assertThat(stepResult.isSuccessful()).isFalse();
-        assertThat(stepResult.getErrorMessage()).isEqualTo("Verifying that '%s' failed. %s.".formatted(verification, failMsg));
+        assertThat(stepResult.getErrorMessage()).isEqualTo("Verifying that '%s' failed. %s".formatted(verification, failMsg));
         assertThat(stepResult.getScreenshot()).isNotNull();
         assertThat(stepResult.getExecutionStartTimestamp()).isNotNull();
         assertThat(stepResult.getExecutionEndTimestamp()).isNotNull();
@@ -305,7 +305,7 @@ class AgentTest {
         assertThat(result.getStepResults()).hasSize(1);
         TestStepResult stepResult = result.getStepResults().getFirst();
         assertThat(stepResult.isSuccessful()).isFalse();
-        assertThat(stepResult.getErrorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s."
+        assertThat(stepResult.getErrorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s"
                 .formatted(action, failMsg));
         assertThat(stepResult.getScreenshot()).isNotNull();
         assertThat(stepResult.getExecutionStartTimestamp()).isNotNull();
@@ -334,7 +334,7 @@ class AgentTest {
         assertThat(result.getStepResults()).hasSize(1);
         TestStepResult stepResult = result.getStepResults().getFirst();
         assertThat(stepResult.isSuccessful()).isFalse();
-        String expectedCauseMessage = "'%s' tool execution failed. The cause: %s".formatted(MOCK_TOOL_NAME, toolException.getMessage());
+        String expectedCauseMessage = "'%s' tool execution failed because of internal error".formatted(MOCK_TOOL_NAME);
         assertThat(stepResult.getErrorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s.".formatted(action,
                 expectedCauseMessage));
         assertThat(stepResult.getScreenshot()).isNotNull();
@@ -369,7 +369,7 @@ class AgentTest {
         assertThat(result.getStepResults()).hasSize(1);
         TestStepResult stepResult = result.getStepResults().getFirst();
         assertThat(stepResult.isSuccessful()).isFalse();
-        String expectedCause = "The requested tool 'nonExistentTool' is not registered, please fix the prompt.";
+        String expectedCause = "The requested tool 'nonExistentTool' is not registered, please fix the prompt";
         assertThat(stepResult.getErrorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s"
                 .formatted(action, expectedCause));
         assertThat(stepResult.getScreenshot()).isNotNull();

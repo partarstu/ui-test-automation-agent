@@ -50,7 +50,7 @@ public class ChromaRetriever implements UiElementRetriever {
                     .logResponses(true)
                     .build();
         } catch (RuntimeException e) {
-            String errorMessage = String.format("Failed to connect to ChromaDB at URL: %s", url);
+            String errorMessage = String.format("Failed to connect to ChromaDB at URL: %s. Root cause: ", url);
             LOG.error(errorMessage, e);
             throw e;
         }

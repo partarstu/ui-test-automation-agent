@@ -16,9 +16,9 @@
 package org.tarik.ta.model;
 
 import dev.langchain4j.model.azure.AzureOpenAiChatModel;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
-import dev.langchain4j.model.vertexai.VertexAiGeminiChatModel;
+import dev.langchain4j.model.vertexai.gemini.VertexAiGeminiChatModel;
 import org.tarik.ta.AgentConfig;
 
 import static org.tarik.ta.AgentConfig.*;
@@ -47,7 +47,7 @@ public class ModelFactory {
         };
     }
 
-    private static ChatLanguageModel getGeminiModel(String modelName) {
+    private static ChatModel getGeminiModel(String modelName) {
         var provider = AgentConfig.getGoogleApiProvider();
         return switch (provider) {
             case STUDIO_AI -> GoogleAiGeminiChatModel.builder()
@@ -71,7 +71,7 @@ public class ModelFactory {
         };
     }
 
-    private static ChatLanguageModel getOpenAiModel(String modelName) {
+    private static ChatModel getOpenAiModel(String modelName) {
         return AzureOpenAiChatModel.builder()
                 .maxRetries(MAX_RETRIES)
                 .apiKey(AgentConfig.getOpenAiApiKey())

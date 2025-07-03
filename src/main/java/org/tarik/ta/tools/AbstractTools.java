@@ -41,6 +41,7 @@ public class AbstractTools {
 
     @NotNull
     protected static ToolExecutionResult getFailedToolExecutionResult(String message, boolean retryMakesSense) {
+        LOG.error(message);
         return new ToolExecutionResult(ERROR, message, retryMakesSense);
     }
 

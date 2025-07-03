@@ -15,11 +15,12 @@
  */
 package org.tarik.ta;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
-import jakarta.enterprise.context.ApplicationScoped;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -40,10 +41,10 @@ import org.tarik.ta.tools.AbstractTools.ToolExecutionStatus;
 import org.tarik.ta.tools.CommonTools;
 import org.tarik.ta.tools.KeyboardTools;
 import org.tarik.ta.tools.MouseTools;
+import org.tarik.ta.utils.CommonUtils;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Function;
@@ -52,6 +53,7 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 import static dev.langchain4j.agent.tool.ToolSpecifications.toolSpecificationsFrom;
+import static java.lang.String.join;
 import static java.lang.System.exit;
 import static java.time.Instant.now;
 import static java.util.Optional.ofNullable;
@@ -63,10 +65,9 @@ import static org.tarik.ta.model.ModelFactory.getVisionModel;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.utils.CommonUtils.*;
 
-@ApplicationScoped
 public class Agent {
     private static final Logger LOG = LoggerFactory.getLogger(Agent.class);
-    protected static final Gson GSON = new Gson();
+    protected static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
     protected static final Map<String, Tool> allToolsByName = getToolsByName();
     protected static final int TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS = getTestStepExecutionRetryTimeoutMillis();
     protected static final int VERIFICATION_RETRY_TIMEOUT_MILLIS = getVerificationRetryTimeoutMillis();
@@ -108,7 +109,8 @@ public class Agent {
             if (!preconditionResult.success()) {
                 var errorMessage = "Preconditions not met. %s".formatted(preconditionResult.message());
                 LOG.error(errorMessage);
-                return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp, now(), errorMessage);
+                return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp, now(),
+                        errorMessage);
             }
             LOG.info("Preconditions met for test case: {}", testCase.name());
         }
@@ -119,15 +121,16 @@ public class Agent {
             var testData = testStep.testData();
 
             String actionInstructionWithData = actionInstruction;
-            if (testData != null && !testData.isEmpty()) {
-                actionInstructionWithData += " using following input data: '%s'".formatted(String.join("', '", testData));
+            if (testData != null && !testData.isEmpty() && testData.stream().anyMatch(CommonUtils::isNotBlank)) {
+                var nonEmptyTestData = testData.stream().filter(CommonUtils::isNotBlank).toList();
+                actionInstructionWithData += " using following input data: '%s'".formatted(join("', '", nonEmptyTestData));
             }
 
             try {
                 var executionStartTimestamp = now();
                 var actionResult = processActionRequest(actionInstructionWithData);
                 if (!actionResult.success()) {
-                    var errorMessage = "Failure while executing action '%s'. Root cause: %s."
+                    var errorMessage = "Failure while executing action '%s'. Root cause: %s"
                             .formatted(actionInstructionWithData, actionResult.message());
                     addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, null, executionStartTimestamp, now());
                     return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null,
@@ -140,11 +143,12 @@ public class Agent {
                     var finalInstruction = "Verify that %s".formatted(verificationInstruction);
                     var verificationResult = processVerificationRequest(finalInstruction);
                     if (!verificationResult.success()) {
-                        var errorMessage = "Verifying that '%s' failed. %s."
+                        var errorMessage = "Verifying that '%s' failed. %s"
                                 .formatted(verificationInstruction, verificationResult.message());
                         addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, verificationResult.message(),
                                 executionStartTimestamp, now());
-                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, null, testExecutionStartTimestamp, now(), errorMessage);
+                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, null, testExecutionStartTimestamp, now(),
+                                errorMessage);
                     }
                     actualResult = verificationResult.message();
                 }
@@ -214,8 +218,9 @@ public class Agent {
                 return new ActionExecutionResult(false, e.getLocalizedMessage());
             }
         } else {
-            return new ActionExecutionResult(false,
-                    "Tools were not used but any action execution requires tools. Model response: " + message.text());
+            var errorMessage = "Tools were not used but any action execution requires tools. Model response: " + message.text();
+            LOG.error(errorMessage);
+            return new ActionExecutionResult(false, errorMessage);
         }
     }
 
@@ -297,24 +302,28 @@ public class Agent {
         Class<?> toolClass = tool.clazz();
         int paramsAmount = tool.toolSpecification().parameters().properties().size();
         var method = getToolClassMethod(toolClass, toolName, paramsAmount);
-        Map<String, String> argumentsMap = GSON.fromJson(args, new TypeToken<Map<String, String>>() {
-        }.getType());
-        var arguments = Arrays.stream(method.getParameters())
-                .map(Parameter::getName)
-                .map(paramName -> argumentsMap.getOrDefault(paramName, null))
-                .toArray(String[]::new);
+        var arguments = parseArgumentsJson(args, method);
         try {
-            var result = (ToolExecutionResult) method.invoke(toolClass, (Object[]) arguments);
+            var result = (ToolExecutionResult) method.invoke(toolClass, arguments);
             LOG.info("Tool execution completed '{}' using arguments: <{}>", toolName, Arrays.toString(arguments));
             return result;
         } catch (IllegalAccessException e) {
             throw new RuntimeException("Access denied while invoking tool '%s'".formatted(toolName), e);
         } catch (InvocationTargetException e) {
-            var toolError = e.getCause();
-            LOG.error("Exception thrown by tool '{}': {}", toolName, toolError != null ? toolError.getMessage() : "Unknown Cause",
-                    toolError);
-            throw new RuntimeException("'%s' tool execution failed. The cause: %s".formatted(toolName,
-                    ofNullable(e.getMessage()).or(() -> ofNullable(e.getCause().getMessage())).orElse("Unknown")), toolError);
+            LOG.error("Exception thrown by tool '{}': {}", toolName, (ofNullable(e.getMessage()).orElse("Unknown Cause")), e);
+            throw new RuntimeException("'%s' tool execution failed because of internal error.".formatted(toolName), e);
+        }
+    }
+
+    private static @NotNull Object[] parseArgumentsJson(String argsJson, Method method) {
+        try {
+            Map<String, Object> argumentsMap = OBJECT_MAPPER.readValue(argsJson, new TypeReference<>() {
+            });
+            return Arrays.stream(method.getParameters())
+                    .map(parameter -> OBJECT_MAPPER.convertValue(argumentsMap.get(parameter.getName()), parameter.getType()))
+                    .toArray();
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Couldn't parse the tool arguments JSON: %s".formatted(argsJson), e);
         }
     }
 

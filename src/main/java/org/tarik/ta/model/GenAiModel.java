@@ -18,7 +18,7 @@ package org.tarik.ta.model;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.ChatRequestParameters;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -38,9 +38,9 @@ import static org.tarik.ta.utils.ModelUtils.parseModelResponseAsObject;
 
 public class GenAiModel implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(GenAiModel.class);
-    private final ChatLanguageModel chatLanguageModel;
+    private final ChatModel chatLanguageModel;
 
-    public GenAiModel(@NotNull ChatLanguageModel chatLanguageModel) {
+    public GenAiModel(@NotNull ChatModel chatLanguageModel) {
         this.chatLanguageModel = chatLanguageModel;
     }
 
