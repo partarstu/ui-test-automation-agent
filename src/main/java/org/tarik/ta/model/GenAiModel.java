@@ -22,6 +22,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.ChatRequestParameters;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,7 @@ import org.tarik.ta.prompts.StructuredResponsePrompt;
 import java.time.Instant;
 import java.util.List;
 
+import static dev.langchain4j.model.chat.request.ResponseFormat.TEXT;
 import static java.time.Duration.between;
 import static java.time.Instant.now;
 import static java.util.Objects.requireNonNull;
@@ -66,7 +68,7 @@ public class GenAiModel implements AutoCloseable {
     }
 
     private ChatResponse generate(SystemMessage systemMessage, UserMessage userMessage,
-                                 String generationDescription) {
+                                  String generationDescription) {
         var start = now();
         var response = chatLanguageModel.chat(userMessage, systemMessage);
         validateAndLogResponse(generationDescription, response, start);
@@ -74,11 +76,15 @@ public class GenAiModel implements AutoCloseable {
     }
 
     private ChatResponse generate(SystemMessage systemMessage, UserMessage userMessage,
-                                 List<ToolSpecification> toolSpecifications, String generationDescription) {
+                                  List<ToolSpecification> toolSpecifications, String generationDescription) {
         var start = now();
+        var paramsBuilder = ChatRequestParameters.builder().toolSpecifications(toolSpecifications);
+        if (!toolSpecifications.isEmpty() && chatLanguageModel instanceof GoogleAiGeminiChatModel) {
+            paramsBuilder.responseFormat(TEXT);
+        }
         var chatRequest = ChatRequest.builder()
                 .messages(systemMessage, userMessage)
-                .parameters(ChatRequestParameters.builder().toolSpecifications(toolSpecifications).build())
+                .parameters(paramsBuilder.build())
                 .build();
         var response = chatLanguageModel.chat(chatRequest);
         validateAndLogResponse(generationDescription, response, start);
@@ -91,8 +97,8 @@ public class GenAiModel implements AutoCloseable {
         requireNonNull(response, "Model response can't be null");
         requireNonNull(responseMetadata, "Model response metadata can't be null");
         requireNonNull(message, "Model response message can't be null");
-        LOG.info("Done content generation for {} by {} in {} millis, response: {}",
-                generationDescription, responseMetadata.modelName(), between(start, now()).toMillis(), message.text());
+        LOG.info("Done content generation for {} by {} in {} millis",
+                generationDescription, responseMetadata.modelName(), between(start, now()).toMillis());
         LOG.info("Tokens usage: {}", response.tokenUsage());
     }
 }

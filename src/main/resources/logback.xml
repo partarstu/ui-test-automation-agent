@@ -20,4 +20,7 @@
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="FILE"/>
     </root>
+
+    <logger name="org.eclipse.jetty" level="OFF" />
+    <logger name="langchain4j" level="DEBUG" />
 </configuration>

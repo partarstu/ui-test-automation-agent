@@ -15,12 +15,18 @@
  */
 package org.tarik.ta.model;
 
+import com.google.cloud.vertexai.api.Schema;
 import dev.langchain4j.model.azure.AzureOpenAiChatModel;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.googleai.GeminiThinkingConfig;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.vertexai.gemini.VertexAiGeminiChatModel;
 import org.tarik.ta.AgentConfig;
+import java.util.List;
+import static java.util.Collections.singletonList;
 
+import static dev.langchain4j.model.chat.request.ResponseFormat.JSON;
+import static dev.langchain4j.model.chat.request.ResponseFormat.TEXT;
 import static org.tarik.ta.AgentConfig.*;
 
 public class ModelFactory {
@@ -30,24 +36,25 @@ public class ModelFactory {
     private static final int MAX_OUTPUT_TOKENS = getMaxOutputTokens();
     private static final double TEMPERATURE = getTemperature();
     private static final double TOP_P = getTopP();
+    private static final ModelProvider MODEL_PROVIDER = AgentConfig.getModelProvider();
+    private static final boolean LOG_MODEL_OUTPUTS = isModelLoggingEnabled();
+    private static final boolean OUTPUT_THOUGHTS = isThinkingOutputEnabled();
 
-    public static GenAiModel getInstructionModel() {
-        var provider = AgentConfig.getModelProvider();
-        return switch (provider) {
-            case GOOGLE -> new GenAiModel(getGeminiModel(INSTRUCTION_MODEL_NAME));
+    public static GenAiModel getInstructionModel(boolean outputJson) {
+        return switch (MODEL_PROVIDER) {
+            case GOOGLE -> new GenAiModel(getGeminiModel(INSTRUCTION_MODEL_NAME, outputJson, LOG_MODEL_OUTPUTS, OUTPUT_THOUGHTS));
             case OPENAI -> new GenAiModel(getOpenAiModel(INSTRUCTION_MODEL_NAME));
         };
     }
 
-    public static GenAiModel getVisionModel() {
-        var provider = AgentConfig.getModelProvider();
-        return switch (provider) {
-            case GOOGLE -> new GenAiModel(getGeminiModel(VISION_MODEL_NAME));
+    public static GenAiModel getVisionModel(boolean outputJson) {
+        return switch (MODEL_PROVIDER) {
+            case GOOGLE -> new GenAiModel(getGeminiModel(VISION_MODEL_NAME, outputJson, LOG_MODEL_OUTPUTS, OUTPUT_THOUGHTS));
             case OPENAI -> new GenAiModel(getOpenAiModel(VISION_MODEL_NAME));
         };
     }
 
-    private static ChatModel getGeminiModel(String modelName) {
+    private static ChatModel getGeminiModel(String modelName, boolean outputJson, boolean logResponses, boolean outputThoughts) {
         var provider = AgentConfig.getGoogleApiProvider();
         return switch (provider) {
             case STUDIO_AI -> GoogleAiGeminiChatModel.builder()
@@ -57,6 +64,13 @@ public class ModelFactory {
                     .maxOutputTokens(MAX_OUTPUT_TOKENS)
                     .temperature(TEMPERATURE)
                     .topP(TOP_P)
+                    .logRequestsAndResponses(logResponses)
+                    //.responseFormat(outputJson ? JSON : TEXT)
+                    .thinkingConfig(GeminiThinkingConfig.builder()
+                            .includeThoughts(outputThoughts)
+                            .thinkingBudget(20000)
+                            .build())
+                    .listeners(singletonList(new ChatModelEventListener()))
                     .build();
 
             case VERTEX_AI -> VertexAiGeminiChatModel.builder()
@@ -67,6 +81,8 @@ public class ModelFactory {
                     .maxOutputTokens(MAX_OUTPUT_TOKENS)
                     .temperature((float) TEMPERATURE)
                     .topP((float) TOP_P)
+                    .logResponses(logResponses)
+                    .listeners(singletonList(new ChatModelEventListener()))
                     .build();
         };
     }
@@ -80,6 +96,7 @@ public class ModelFactory {
                 .endpoint(getOpenAiEndpoint())
                 .temperature(TEMPERATURE)
                 .topP(TOP_P)
+                .listeners(singletonList(new ChatModelEventListener()))
                 .build();
     }
 }

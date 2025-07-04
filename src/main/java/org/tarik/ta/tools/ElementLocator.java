@@ -277,7 +277,7 @@ public class ElementLocator extends AbstractTools {
                 .withBoundingBoxColor(BOUNDING_BOX_COLOR)
                 .build();
 
-        try (var model = getVisionModel()) {
+        try (var model = getVisionModel(false)) {
             var uiElementDescriptionResult = model.generateAndGetResponseAsObject(prompt,
                     "generating the description of selected UI element");
             var describedUiElement = new UiElement(randomUUID(), uiElementDescriptionResult.name(),
@@ -326,7 +326,7 @@ public class ElementLocator extends AbstractTools {
                 .withTargetElementDescription(targetElementDescription)
                 .withScreenshot(resultingScreenshot)
                 .build();
-        try (var model = getVisionModel()) {
+        try (var model = getVisionModel(false)) {
             var identifiedElement = model.generateAndGetResponseAsObject(prompt,
                     "identifying the best matching UI element");
             if (identifiedElement.success()) {

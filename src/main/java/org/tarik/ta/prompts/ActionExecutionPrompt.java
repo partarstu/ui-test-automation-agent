@@ -18,7 +18,6 @@ package org.tarik.ta.prompts;
 import dev.langchain4j.data.message.Content;
 import org.jetbrains.annotations.NotNull;
 
-import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Map;
 
@@ -28,12 +27,10 @@ import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 public class ActionExecutionPrompt extends AbstractPrompt {
     private static final String SYSTEM_PROMPT_FILE_NAME = "action_execution_prompt.txt";
     private static final String ACTION_DESCRIPTION_PLACEHOLDER = "action_description";
-    private final BufferedImage screenshot;
 
     private ActionExecutionPrompt(@NotNull Map<String, String> systemMessagePlaceholders,
-                                  @NotNull Map<String, String> userMessagePlaceholders, BufferedImage screenshot) {
+                                  @NotNull Map<String, String> userMessagePlaceholders) {
         super(systemMessagePlaceholders, userMessagePlaceholders);
-        this.screenshot = screenshot;
     }
 
     public static Builder builder() {
@@ -42,12 +39,12 @@ public class ActionExecutionPrompt extends AbstractPrompt {
 
     @Override
     protected List<Content> getUserMessageAdditionalContents() {
-        return List.of(singleImageContent(screenshot));
+        return List.of();
     }
 
     @Override
     protected String getUserMessageTemplate() {
-        return "The action is: {{%s}}".formatted(ACTION_DESCRIPTION_PLACEHOLDER);
+        return "The action is: {{%s}}\nThe screenshot is:\n".formatted(ACTION_DESCRIPTION_PLACEHOLDER);
     }
 
     @Override
@@ -57,21 +54,15 @@ public class ActionExecutionPrompt extends AbstractPrompt {
 
     public static class Builder {
         private String actionDescription;
-        private BufferedImage screenshot;
 
         public Builder withActionDescription(@NotNull String action) {
             this.actionDescription = action;
             return this;
         }
 
-        public Builder screenshot(BufferedImage screenshot) {
-            this.screenshot = screenshot;
-            return this;
-        }
-
         public ActionExecutionPrompt build() {
             checkArgument(isNotBlank(actionDescription), "Action description must be set");
-            return new ActionExecutionPrompt(Map.of(), Map.of(ACTION_DESCRIPTION_PLACEHOLDER, actionDescription), screenshot);
+            return new ActionExecutionPrompt(Map.of(), Map.of(ACTION_DESCRIPTION_PLACEHOLDER, actionDescription));
         }
     }
 }

@@ -72,6 +72,7 @@ public class MouseTools extends AbstractTools {
             sleepMillis(MOUSE_ACTION_DELAY_MILLIS);
             robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
             robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
+            sleepMillis(MOUSE_ACTION_DELAY_MILLIS);
             var message = "Clicked left mouse button on '%s' using location %s".formatted(elementDescription, elementLocation);
             return getSuccessfulResult(message);
         });

@@ -22,12 +22,11 @@ import org.tarik.ta.utils.CommonUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.Properties;
 
-import static com.google.common.io.Files.newReader;
+import static java.lang.Boolean.parseBoolean;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.stream;
 import static java.util.Optional.empty;
@@ -36,8 +35,6 @@ import static java.util.Optional.ofNullable;
 public class AgentConfig {
     private static final Logger LOG = LoggerFactory.getLogger(AgentConfig.class);
     private static final Properties properties = loadProperties();
-    private static final String CONFIG_FILE = "config.properties";
-
     public enum ModelProvider {
         GOOGLE,
         OPENAI
@@ -53,179 +50,198 @@ public class AgentConfig {
     }
 
     // -----------------------------------------------------
+    // Constants
+    private static final String CONFIG_FILE = "config.properties";
+
+    // Main Config
+    private static final int START_PORT = loadPropertyAsInteger("port", "PORT", "7070");
+    private static final boolean UNATTENDED_MODE = parseBoolean(getProperty("unattended.mode", "UNATTENDED_MODE", "false"));
+    private static final String HOST = getRequiredProperty("host", "AGENT_HOST");
+    private static final boolean TEST_MODE = parseBoolean(getProperty("test.mode", "TEST_MODE", "false"));
+
+    // RAG Config
+    private static final RagDbProvider VECTOR_DB_PROVIDER = stream(RagDbProvider.values())
+            .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(getProperty("vector.db.provider", "VECTOR_DB_PROVIDER", "chroma")))
+            .findAny()
+            .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported RAG DB provider. Supported ones: %s".formatted(
+                    getProperty("vector.db.provider", "VECTOR_DB_PROVIDER", "chroma"), Arrays.toString(RagDbProvider.values())))));
+    private static final String VECTOR_DB_URL = getRequiredProperty("vector.db.url", "VECTOR_DB_URL");
+    private static final int RETRIEVER_TOP_N = loadPropertyAsInteger("retriever.top.n", "RETRIEVER_TOP_N", "3");
+
+    // Model Config
+    private static final ModelProvider MODEL_PROVIDER = stream(ModelProvider.values())
+            .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(getProperty("model.provider", "MODEL_PROVIDER", "google")))
+            .findAny()
+            .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported model provider. Supported ones: %s".formatted(
+                    getProperty("model.provider", "MODEL_PROVIDER", "google"), Arrays.toString(ModelProvider.values())))));
+    private static final String INSTRUCTION_MODEL_NAME = getProperty("instruction.model.name", "INSTRUCTION_MODEL_NAME", "gemini-2.0-flash");
+    private static final String VISION_MODEL_NAME = getProperty("vision.model.name", "VISION_MODEL_NAME", "gemini-2.5-pro-exp-03-25");
+    private static final int MAX_OUTPUT_TOKENS = loadPropertyAsInteger("model.max.output.tokens", "MAX_OUTPUT_TOKENS", "5000");
+    private static final double TEMPERATURE = loadPropertyAsDouble("model.temperature", "TEMPERATURE", "0.0");
+    private static final double TOP_P = loadPropertyAsDouble("model.top.p", "TOP_P", "1.0");
+    private static final boolean MODEL_LOGGING_ENABLED = parseBoolean(getProperty("model.logging.enabled", "LOG_MODEL_OUTPUT", "false"));
+    private static final boolean THINKING_OUTPUT_ENABLED = parseBoolean(getProperty("thinking.output.enabled", "OUTPUT_THINKING", "false"));
+    private static final int MAX_RETRIES = loadPropertyAsInteger("model.max.retries", "MAX_RETRIES", "10");
+
+    // Google API Config (Only relevant if model.provider is Google)
+    private static final GoogleApiProvider GOOGLE_API_PROVIDER = stream(GoogleApiProvider.values())
+            .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(getProperty("google.api.provider", "GOOGLE_API_PROVIDER", "studio_ai")))
+            .findAny()
+            .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported Google API provider. Supported ones: %s".formatted(
+                    getProperty("google.api.provider", "GOOGLE_API_PROVIDER", "studio_ai"), Arrays.toString(GoogleApiProvider.values())))));
+    private static final String GOOGLE_API_TOKEN = getRequiredProperty("google.api.token", "GOOGLE_AI_TOKEN");
+    private static final String GOOGLE_PROJECT = getRequiredProperty("google.project", "GOOGLE_PROJECT");
+    private static final String GOOGLE_LOCATION = getRequiredProperty("google.location", "GOOGLE_LOCATION");
+
+    // OpenAI API Config
+    private static final String OPENAI_API_KEY = getRequiredProperty("openai.api.key", "OPENAI_API_KEY");
+    private static final String OPENAI_API_ENDPOINT = getRequiredProperty("openai.api.endpoint", "OPENAI_API_ENDPOINT");
+
+    // Timeout and Retry Config
+    private static final int TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS = loadPropertyAsInteger("test.step.execution.retry.timeout.millis", "TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS", "10000");
+    private static final int TEST_STEP_EXECUTION_RETRY_INTERVAL_MILLIS = loadPropertyAsInteger("test.step.execution.retry.interval.millis", "TEST_STEP_EXECUTION_RETRY_INTERVAL_MILLIS", "1000");
+    private static final int VERIFICATION_RETRY_TIMEOUT_MILLIS = loadPropertyAsInteger("verification.retry.timeout.millis", "VERIFICATION_RETRY_TIMEOUT_MILLIS", "10000");
+    private static final int ACTION_VERIFICATION_DELAY_MILLIS = loadPropertyAsInteger("action.verification.delay.millis", "ACTION_VERIFICATION_DELAY_MILLIS", "1000");
+
+    // -----------------------------------------------------
     // Main Config
     public static boolean isUnattendedMode() {
-        return Boolean.parseBoolean(getProperty("unattended.mode", "UNATTENDED_MODE", "false"));
+        return UNATTENDED_MODE;
     }
 
     public static int getStartPort() {
-        return loadPropertyAsInteger("port", "PORT", "7070");
+        return START_PORT;
     }
-
     public static String getHost() {
-        return getRequiredProperty("host", "AGENT_HOST");
+        return HOST;
     }
-
     public static boolean isTestMode() {
-        return Boolean.parseBoolean(getProperty("test.mode", "TEST_MODE", "false"));
+        return TEST_MODE;
     }
 
     // -----------------------------------------------------
     // RAG Config
     public static RagDbProvider getVectorDbProvider() {
-        String providerName = getProperty("vector.db.provider", "VECTOR_DB_PROVIDER", "chroma");
-        return stream(RagDbProvider.values())
-                .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(providerName))
-                .findAny()
-                .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported RAG DB provider. Supported ones: %s".formatted(
-                        providerName, Arrays.toString(RagDbProvider.values())))));
+        return VECTOR_DB_PROVIDER;
     }
-
     public static String getVectorDbUrl() {
-        return getRequiredProperty("vector.db.url", "VECTOR_DB_URL");
+        return VECTOR_DB_URL;
     }
-
     public static int getRetrieverTopN() {
-        return loadPropertyAsInteger("retriever.top.n", "RETRIEVER_TOP_N", "3");
+        return RETRIEVER_TOP_N;
     }
 
     // -----------------------------------------------------
     // Model Config
     public static ModelProvider getModelProvider() {
-        var providerName = getProperty("model.provider", "MODEL_PROVIDER", "google");
-        return stream(ModelProvider.values())
-                .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(providerName))
-                .findAny()
-                .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported model provider. Supported ones: %s".formatted(
-                        providerName, Arrays.toString(ModelProvider.values())))));
+        return MODEL_PROVIDER;
     }
-
     public static String getInstructionModelName() {
-        return getProperty("instruction.model.name", "INSTRUCTION_MODEL_NAME", "gemini-2.0-flash");
+        return INSTRUCTION_MODEL_NAME;
     }
-
     public static String getVisionModelName() {
-        return getProperty("vision.model.name", "VISION_MODEL_NAME", "gemini-2.5-pro-exp-03-25");
+        return VISION_MODEL_NAME;
     }
-
     public static int getMaxOutputTokens() {
-        return loadPropertyAsInteger("model.max.output.tokens", "MAX_OUTPUT_TOKENS", "5000");
+        return MAX_OUTPUT_TOKENS;
     }
-
     public static double getTemperature() {
-        return loadPropertyAsDouble("model.temperature", "TEMPERATURE", "0.0");
+        return TEMPERATURE;
     }
-
     public static double getTopP() {
-        return loadPropertyAsDouble("model.top.p", "TOP_P", "1.0");
+        return TOP_P;
     }
-
+    public static boolean isModelLoggingEnabled() {
+        return MODEL_LOGGING_ENABLED;
+    }
+    public static boolean isThinkingOutputEnabled() {
+        return THINKING_OUTPUT_ENABLED;
+    }
     public static int getMaxRetries() {
-        return loadPropertyAsInteger("model.max.retries", "MAX_RETRIES", "10");
+        return MAX_RETRIES;
     }
-
     // -----------------------------------------------------
     // Google API Config (Only relevant if model.provider is Google)
     public static GoogleApiProvider getGoogleApiProvider() {
-        var providerName = getProperty("google.api.provider", "GOOGLE_API_PROVIDER", "studio_ai");
-        return stream(GoogleApiProvider.values())
-                .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(providerName))
-                .findAny()
-                .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported Google API provider. Supported ones: %s".formatted(
-                        providerName, Arrays.toString(GoogleApiProvider.values())))));
+        return GOOGLE_API_PROVIDER;
     }
-
     public static String getGoogleApiToken() {
-        return getRequiredProperty("google.api.token", "GOOGLE_AI_TOKEN");
+        return GOOGLE_API_TOKEN;
     }
-
     public static String getGoogleProject() {
-        return getRequiredProperty("google.project", "GOOGLE_PROJECT");
+        return GOOGLE_PROJECT;
     }
-
     public static String getGoogleLocation() {
-        return getRequiredProperty("google.location", "GOOGLE_LOCATION");
+        return GOOGLE_LOCATION;
     }
-
     // -----------------------------------------------------
     // OpenAI API Config
     public static String getOpenAiApiKey() {
-        return getRequiredProperty("openai.api.key", "OPENAI_API_KEY");
+        return OPENAI_API_KEY;
     }
-
     public static String getOpenAiEndpoint() {
-        return getRequiredProperty("openai.api.endpoint", "OPENAI_API_ENDPOINT");
+        return OPENAI_API_ENDPOINT;
     }
-
     // -----------------------------------------------------
     // Timeout and Retry Config
     public static int getTestStepExecutionRetryTimeoutMillis() {
-        return loadPropertyAsInteger("test.step.execution.retry.timeout.millis",
-                "TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS", "10000");
+        return TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS;
     }
-
     public static int getTestStepExecutionRetryIntervalMillis() {
-        return loadPropertyAsInteger("test.step.execution.retry.interval.millis",
-                "TEST_STEP_EXECUTION_RETRY_INTERVAL_MILLIS",
-                "1000");
+        return TEST_STEP_EXECUTION_RETRY_INTERVAL_MILLIS;
     }
-
     public static int getVerificationRetryTimeoutMillis() {
-        return loadPropertyAsInteger("verification.retry.timeout.millis",
-                "VERIFICATION_RETRY_TIMEOUT_MILLIS", "10000");
+        return VERIFICATION_RETRY_TIMEOUT_MILLIS;
     }
-
     public static int getActionVerificationDelayMillis() {
-        return loadPropertyAsInteger("action.verification.delay.millis",
-                "ACTION_VERIFICATION_DELAY_MILLIS", "1000");
+        return ACTION_VERIFICATION_DELAY_MILLIS;
     }
-
-
     // -----------------------------------------------------
     // Element Config
+    private static final String ELEMENT_BOUNDING_BOX_COLOR_NAME = getRequiredProperty("element.bounding.box.color", "BOUNDING_BOX_COLOR"); // Element Config
     public static String getElementBoundingBoxColorName() {
-        return getRequiredProperty("element.bounding.box.color", "BOUNDING_BOX_COLOR");
+        return ELEMENT_BOUNDING_BOX_COLOR_NAME;
     }
-
+    private static final double ELEMENT_RETRIEVAL_MIN_TARGET_SCORE = Double.parseDouble(getProperty("element.retrieval.min.target.score", "ELEMENT_RETRIEVAL_MIN_TARGET_SCORE", "0.85"));
     public static double getElementRetrievalMinTargetScore() {
-        return Double.parseDouble(getProperty("element.retrieval.min.target.score", "ELEMENT_RETRIEVAL_MIN_TARGET_SCORE", "0.85"));
+        return ELEMENT_RETRIEVAL_MIN_TARGET_SCORE;
     }
-
+    private static final double ELEMENT_RETRIEVAL_MIN_GENERAL_SCORE = Double.parseDouble(getProperty("element.retrieval.min.general.score", "ELEMENT_RETRIEVAL_MIN_GENERAL_SCORE", "0.4"));
     public static double getElementRetrievalMinGeneralScore() {
-        return Double.parseDouble(getProperty("element.retrieval.min.general.score", "ELEMENT_RETRIEVAL_MIN_GENERAL_SCORE", "0.4"));
+        return ELEMENT_RETRIEVAL_MIN_GENERAL_SCORE;
     }
-
+    private static final double ELEMENT_LOCATOR_VISUAL_SIMILARITY_THRESHOLD = Double.parseDouble(getProperty("element.locator.visual.similarity.threshold", "VISUAL_SIMILARITY_THRESHOLD", "0.8"));
     public static double getElementLocatorVisualSimilarityThreshold() {
-        return Double.parseDouble(getProperty("element.locator.visual.similarity.threshold", "VISUAL_SIMILARITY_THRESHOLD", "0.8"));
+        return ELEMENT_LOCATOR_VISUAL_SIMILARITY_THRESHOLD;
     }
-
+    private static final int ELEMENT_LOCATOR_TOP_VISUAL_MATCHES = loadPropertyAsInteger("element.locator.top.visual.matches",
+            "TOP_VISUAL_MATCHES_TO_FIND",
+            "3");
     public static int getElementLocatorTopVisualMatches() {
-        return loadPropertyAsInteger("element.locator.top.visual.matches",
-                "TOP_VISUAL_MATCHES_TO_FIND",
-                "3");
+        return ELEMENT_LOCATOR_TOP_VISUAL_MATCHES;
     }
-
     // -----------------------------------------------------
     // User UI dialogs
+    private static final int DIALOG_DEFAULT_HORIZONTAL_GAP = loadPropertyAsInteger("dialog.default.horizontal.gap", "DIALOG_DEFAULT_HORIZONTAL_GAP", "10");
     public static int getDialogDefaultHorizontalGap() {
-        return loadPropertyAsInteger("dialog.default.horizontal.gap", "DIALOG_DEFAULT_HORIZONTAL_GAP", "10");
+        return DIALOG_DEFAULT_HORIZONTAL_GAP;
     }
-
+    private static final int DIALOG_DEFAULT_VERTICAL_GAP = loadPropertyAsInteger("dialog.default.vertical.gap", "DIALOG_DEFAULT_VERTICAL_GAP", "10");
     public static int getDialogDefaultVerticalGap() {
-        return loadPropertyAsInteger("dialog.default.vertical.gap", "DIALOG_DEFAULT_VERTICAL_GAP", "10");
+        return DIALOG_DEFAULT_VERTICAL_GAP;
     }
-
+    private static final String DIALOG_DEFAULT_FONT_TYPE = getProperty("dialog.default.font.type", "DIALOG_DEFAULT_FONT_TYPE", "Dialog");
     public static String getDialogDefaultFontType() {
-        return getProperty("dialog.default.font.type", "DIALOG_DEFAULT_FONT_TYPE", "Dialog");
+        return DIALOG_DEFAULT_FONT_TYPE;
     }
-
+    private static final int DIALOG_USER_INTERACTION_CHECK_INTERVAL_MILLIS = loadPropertyAsInteger("dialog.user.interaction.check.interval.millis", "DIALOG_USER_INTERACTION_CHECK_INTERVAL_MILLIS",
+            "100");
     public static int getDialogUserInteractionCheckIntervalMillis() {
-        return loadPropertyAsInteger("dialog.user.interaction.check.interval.millis", "DIALOG_USER_INTERACTION_CHECK_INTERVAL_MILLIS",
-                "100");
+        return DIALOG_USER_INTERACTION_CHECK_INTERVAL_MILLIS;
     }
-
+    private static final int DIALOG_DEFAULT_FONT_SIZE = loadPropertyAsInteger("dialog.default.font.size", "DIALOG_DEFAULT_FONT_SIZE", "13");
     public static int getDialogDefaultFontSize() {
-        return loadPropertyAsInteger("dialog.default.font.size", "DIALOG_DEFAULT_FONT_SIZE", "13");
+        return DIALOG_DEFAULT_FONT_SIZE;
     }
 
     // -----------------------------------------------------

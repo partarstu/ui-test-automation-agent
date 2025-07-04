@@ -46,6 +46,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -103,11 +104,12 @@ public class Agent {
 
         if (isNotBlank(testCase.preconditions())) {
             LOG.info("Verifying preconditions for test case: {}", testCase.name());
-            var preconditionResult = processPreconditionVerificationRequest(testCase.preconditions());
+            var preconditionResult = processPreconditionValidationRequest(testCase.preconditions());
             if (!preconditionResult.success()) {
                 var errorMessage = "Preconditions not met. %s".formatted(preconditionResult.message());
+                var screenshot = captureScreen();
                 LOG.error(errorMessage);
-                return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp, now(),
+                return new TestExecutionResult(testCase.name(), FAILED, stepResults, screenshot, testExecutionStartTimestamp, now(),
                         errorMessage);
             }
             LOG.info("Preconditions met for test case: {}", testCase.name());
@@ -171,20 +173,20 @@ public class Agent {
     }
 
     private static ActionExecutionResult processActionRequest(String action) {
-        var prompt = ActionExecutionPrompt.builder()
-                .withActionDescription(action)
-                .screenshot(captureScreen())
-                .build();
+
         var deadline = now().plusMillis(TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS);
         LOG.info("Executing action '{}'", action);
         var toolSpecs = allToolsByName.values().stream().map(Tool::toolSpecification).toList();
         try (var model = getActionProcessingModel()) {
-            return executeActionRequest(model, prompt, toolSpecs, deadline);
+            return executeActionRequest(model, action, toolSpecs, deadline);
         }
     }
 
-    private static ActionExecutionResult executeActionRequest(GenAiModel model, ActionExecutionPrompt prompt,
+    private static ActionExecutionResult executeActionRequest(GenAiModel model, String actionDescription,
                                                               List<ToolSpecification> toolSpecs, Instant deadline) {
+        var prompt = ActionExecutionPrompt.builder()
+                .withActionDescription(actionDescription)
+                .build();
         var message = model.generate(prompt, toolSpecs, ACTION_EXECUTION).aiMessage();
         if (message.hasToolExecutionRequests()) {
             var toolExecutionRequests = message.toolExecutionRequests();
@@ -223,7 +225,7 @@ public class Agent {
             return new ActionExecutionResult(true, getToolExecutionDetails(toolExecutionInfoByToolName));
         } else {
             var errorMessage = "Tools were not requested by the model, but any action execution requires tools. " +
-                            "Model response: " + message.text();
+                    "Model response: " + message.text();
             LOG.error(errorMessage);
             return new ActionExecutionResult(false, errorMessage);
         }
@@ -241,65 +243,55 @@ public class Agent {
 
 
     private static VerificationExecutionResult processVerificationRequest(String verification) {
-        var prompt = VerificationExecutionPrompt.builder()
-                .withVerificationDescription(verification)
-                .screenshot(captureScreen())
-                .build();
-        var deadline = now().plusMillis(VERIFICATION_RETRY_TIMEOUT_MILLIS);
-        VerificationExecutionResult result;
+        return executeWithRetries(VERIFICATION_RETRY_TIMEOUT_MILLIS, VERIFICATION_EXECUTION, (model) -> {
+            var prompt = VerificationExecutionPrompt.builder()
+                    .withVerificationDescription(verification)
+                    .screenshot(captureScreen())
+                    .build();
+            LOG.info("'{}'", verification);
+            return model.generateAndGetResponseAsObject(prompt, VERIFICATION_EXECUTION);
+        }, VerificationExecutionResult::success, Agent::getVerificationExecutionModel);
+    }
+
+    private static <T> T executeWithRetries(long retryTimeoutMillis, String operationDescription, Function<GenAiModel, T> resultSupplier,
+                                            Function<T, Boolean> successPredicate, Supplier<GenAiModel> executionModelSupplier) {
+        var deadline = now().plusMillis(retryTimeoutMillis);
+        T result;
         boolean retryActive;
-        try (var model = getVerificationExecutionModel()) {
+        try (var model = executionModelSupplier.get()) {
             do {
-                LOG.info("'{}'", verification);
-                result = model.generateAndGetResponseAsObject(prompt, VERIFICATION_EXECUTION);
-                LOG.info("Result of verification '{}' : <{}>", verification, result);
-                if (result.success()) {
+                result = resultSupplier.apply(model);
+                LOG.info("Result of {} : <{}>", operationDescription, result);
+                if (successPredicate.apply(result)) {
                     return result;
                 } else {
                     retryActive = now().isBefore(deadline);
                     if (retryActive) {
-                        LOG.info("Verification failed, retrying within configured deadline.");
-                        var nextRetryMoment = getNextRetryMoment();
-                        if (nextRetryMoment.isBefore(deadline)) {
-                            waitUntil(nextRetryMoment);
-                        }
+                        waitTillNextRetry(operationDescription + " failed", deadline);
                     }
                 }
             } while (retryActive);
         }
-
         return result;
     }
 
-    private static VerificationExecutionResult processPreconditionVerificationRequest(String precondition) {
-        var prompt = PreconditionVerificationPrompt.builder()
-                .withPreconditionDescription(precondition)
-                .screenshot(captureScreen())
-                .build();
-        var deadline = now().plusMillis(VERIFICATION_RETRY_TIMEOUT_MILLIS);
-        VerificationExecutionResult result;
-        boolean retryActive;
-        try (var model = getVerificationExecutionModel()) {
-            do {
-                LOG.info("Checking if precondition is met: '{}'", precondition);
-                result = model.generateAndGetResponseAsObject(prompt, PRECONDITION_VALIDATION);
-                LOG.info("Result of precondition validation '{}' : <{}>", precondition, result);
-                if (result.success()) {
-                    return result;
-                } else {
-                    retryActive = now().isBefore(deadline);
-                    if (retryActive) {
-                        LOG.info("Precondition verification failed, retrying within configured deadline.");
-                        var nextRetryMoment = getNextRetryMoment();
-                        if (nextRetryMoment.isBefore(deadline)) {
-                            waitUntil(nextRetryMoment);
-                        }
-                    }
-                }
-            } while (retryActive);
-        }
+    private static VerificationExecutionResult processPreconditionValidationRequest(String precondition) {
+        return executeWithRetries(VERIFICATION_RETRY_TIMEOUT_MILLIS, PRECONDITION_VALIDATION, (model) -> {
+            var prompt = PreconditionVerificationPrompt.builder()
+                    .withPreconditionDescription(precondition)
+                    .screenshot(captureScreen())
+                    .build();
+            LOG.info("Checking if precondition is met: '{}'", precondition);
+            return model.generateAndGetResponseAsObject(prompt, PRECONDITION_VALIDATION);
+        }, VerificationExecutionResult::success, Agent::getVerificationExecutionModel);
+    }
 
-        return result;
+    private static void waitTillNextRetry(String retryCause, Instant deadline) {
+        LOG.info("{}, retrying within configured deadline.", retryCause);
+        var nextRetryMoment = getNextRetryMoment();
+        if (nextRetryMoment.isBefore(deadline)) {
+            waitUntil(nextRetryMoment);
+        }
     }
 
     private static Instant getNextRetryMoment() {
@@ -362,11 +354,11 @@ public class Agent {
     }
 
     private static GenAiModel getActionProcessingModel() {
-        return getInstructionModel();
+        return getInstructionModel(false);
     }
 
     private static GenAiModel getVerificationExecutionModel() {
-        return getVisionModel();
+        return getVisionModel(false);
     }
 
     private static Map<String, Tool> getToolsByName() {

@@ -49,7 +49,12 @@ public class PreconditionVerificationPrompt extends StructuredResponsePrompt<Ver
 
     @Override
     protected String getUserMessageTemplate() {
-        return "Verify that {{%s}}, using the following screenshot:\n".formatted(PRECONDITION_DESCRIPTION_PLACEHOLDER);
+        return ("""
+                Verify that the following test case precondition is met: {{%s}}.
+                
+                Here is the screenshot:
+                """)
+                .formatted(PRECONDITION_DESCRIPTION_PLACEHOLDER);
     }
 
     @Override

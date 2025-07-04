@@ -17,7 +17,6 @@ package org.tarik.ta.tools;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
-import org.jetbrains.annotations.NotNull;
 
 import java.awt.event.KeyEvent;
 import java.util.HashMap;
@@ -27,6 +26,8 @@ import java.util.stream.IntStream;
 import static java.lang.Character.isUpperCase;
 import static java.util.Arrays.stream;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.*;
+import static org.tarik.ta.tools.MouseTools.leftMouseClick;
+import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 
 public class KeyboardTools extends AbstractTools {
     private static final Map<String, Integer> actionableKeyCodeByNameMap = getActionableKeyCodesByName();
@@ -60,11 +61,21 @@ public class KeyboardTools extends AbstractTools {
         return getSuccessfulResult(message);
     }
 
-    @Tool(value = "Types the specified text using the keyboard.")
-    public static ToolExecutionResult typeText(@P("The text to be typed.") String text) {
+    @Tool(value = "Types (enters, inputs) the specified text using the keyboard. If the text needs to be input into the element which " +
+            "needs to be explicitly activated, this element is first clicked with a left mouse key and only then the text is input - " +
+            "a detailed description of such element needs to be provided in this case.")
+    public static ToolExecutionResult typeText(
+            @P(value = "The text to be typed.")
+            String text,
+            @P(value = "Detailed description of the UI element in which the text should be input.", required = false)
+            String elementDescription) {
         if (text == null) {
-            return getFailedToolExecutionResult( "%s: Text which needs to be input can't be NULL"
+            return getFailedToolExecutionResult("%s: Text which needs to be input can't be NULL"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
+        }
+
+        if(isNotBlank(elementDescription)){
+            leftMouseClick(elementDescription);
         }
 
         for (char ch : text.toCharArray()) {

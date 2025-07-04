@@ -50,6 +50,8 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.tarik.ta.dto.TestExecutionResult.TestExecutionStatus.FAILED;
 import static org.tarik.ta.dto.TestExecutionResult.TestExecutionStatus.PASSED;
+import static org.tarik.ta.model.ModelFactory.getInstructionModel;
+import static org.tarik.ta.model.ModelFactory.getVisionModel;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.ERROR;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.tools.CommonTools.waitSeconds;
@@ -96,8 +98,8 @@ class AgentTest {
 
 
         // Model Factory
-        modelFactoryMockedStatic.when(ModelFactory::getInstructionModel).thenReturn(mockModel);
-        modelFactoryMockedStatic.when(ModelFactory::getVisionModel).thenReturn(mockModel);
+        modelFactoryMockedStatic.when(()->getInstructionModel(anyBoolean())).thenReturn(mockModel);
+        modelFactoryMockedStatic.when(()->getVisionModel(anyBoolean())).thenReturn(mockModel);
 
         // Common Utils & ImageUtils
         commonUtilsMockedStatic.when(() -> CommonUtils.isNotBlank(anyString())).thenCallRealMethod();
