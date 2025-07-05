@@ -94,8 +94,8 @@ public class AgentConfig {
     private static final String GOOGLE_LOCATION = getRequiredProperty("google.location", "GOOGLE_LOCATION");
 
     // OpenAI API Config
-    private static final String OPENAI_API_KEY = getRequiredProperty("openai.api.key", "OPENAI_API_KEY");
-    private static final String OPENAI_API_ENDPOINT = getRequiredProperty("openai.api.endpoint", "OPENAI_API_ENDPOINT");
+    private static final String OPENAI_API_KEY = getRequiredProperty("azure.openai.api.key", "OPENAI_API_KEY");
+    private static final String OPENAI_API_ENDPOINT = getRequiredProperty("azure.openai.endpoint", "OPENAI_API_ENDPOINT");
 
     // Timeout and Retry Config
     private static final int TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS = loadPropertyAsInteger("test.step.execution.retry.timeout.millis", "TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS", "10000");

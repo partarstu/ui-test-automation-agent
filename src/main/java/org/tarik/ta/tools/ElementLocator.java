@@ -15,12 +15,6 @@
  */
 package org.tarik.ta.tools;
 
-import org.bytedeco.javacpp.Loader;
-import org.bytedeco.opencv.opencv_java;
-import org.jetbrains.annotations.NotNull;
-import org.opencv.core.*;
-import org.opencv.imgcodecs.Imgcodecs;
-import org.opencv.imgproc.Imgproc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tarik.ta.AgentConfig;
@@ -37,44 +31,46 @@ import org.tarik.ta.rag.UiElementRetriever.RetrievedItem;
 import org.tarik.ta.user_dialogs.*;
 
 import java.awt.*;
-import java.awt.Point;
 import java.awt.image.BufferedImage;
-import java.util.*;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+import java.util.LinkedList;
 
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Optional.*;
+import static java.util.Optional.empty;
+import static java.util.Optional.of;
 import static java.util.UUID.randomUUID;
-import static java.util.stream.Collectors.*;
+import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.toConcurrentMap;
+import static java.util.stream.Collectors.toMap;
 import static javax.swing.JOptionPane.showMessageDialog;
-import static org.opencv.imgproc.Imgproc.matchTemplate;
 import static org.tarik.ta.model.ModelFactory.getVisionModel;
 import static org.tarik.ta.utils.BoundingBoxUtil.drawBoundingBoxes;
 import static org.tarik.ta.utils.BoundingBoxUtil.mergeOverlappingRectangles;
-import static org.tarik.ta.utils.CommonUtils.*;
-import static org.tarik.ta.utils.ImageUtils.*;
+import static org.tarik.ta.utils.CommonUtils.captureScreen;
+import static org.tarik.ta.utils.CommonUtils.getColorByName;
+import static org.tarik.ta.utils.CommonUtils.getColorName;
+import static org.tarik.ta.utils.CommonUtils.getScaledBoundingBox;
+import static org.tarik.ta.utils.CommonUtils.sleepMillis;
+import static org.tarik.ta.utils.ImageUtils.cloneImage;
 import static org.tarik.ta.rag.model.UiElement.Screenshot.fromBufferedImage;
-import static org.opencv.imgcodecs.Imgcodecs.imdecode;
-
-import java.util.ArrayList;
-import java.util.function.Supplier;
 
 public class ElementLocator extends AbstractTools {
     private static final Logger LOG = LoggerFactory.getLogger(ElementLocator.class);
-    private static final double VISUAL_SIMILARITY_THRESHOLD = AgentConfig.getElementLocatorVisualSimilarityThreshold();
     private static final double MIN_TARGET_RETRIEVAL_SCORE = AgentConfig.getElementRetrievalMinTargetScore();
     private static final double MIN_GENERAL_RETRIEVAL_SCORE = AgentConfig.getElementRetrievalMinGeneralScore();
     private static final int USER_DIALOG_DISMISS_DELAY_MILLIS = 1000;
     private static final String BOUNDING_BOX_COLOR_NAME = AgentConfig.getElementBoundingBoxColorName();
     private static final Color BOUNDING_BOX_COLOR = getColorByName(BOUNDING_BOX_COLOR_NAME);
     private static final int TOP_N_ELEMENTS_TO_RETRIEVE = AgentConfig.getRetrieverTopN();
-    private static final int TOP_VISUAL_MATCHES_TO_FIND = AgentConfig.getElementLocatorTopVisualMatches();
     private static final boolean UNATTENDED_MODE = AgentConfig.isUnattendedMode();
     private static final UiElementRetriever elementRetriever = RetrieverFactory.getUiElementRetriever();
     private static final boolean IS_IN_TEST_MODE = AgentConfig.isTestMode();
-    private static boolean initialized = false;
     private static final List<Color> availableBoundingBoxColors = List.of(
             Color.RED,
             Color.BLUE,
@@ -87,15 +83,7 @@ public class ElementLocator extends AbstractTools {
             Color.MAGENTA
     );
 
-    private static boolean initializeOpenCv() {
-        Loader.load(opencv_java.class);
-        return true;
-    }
-
     public static Optional<Rectangle> locateElementOnTheScreen(String elementDescription) {
-        if (!initialized) {
-            initialized = initializeOpenCv();
-        }
         var retrievedElements = elementRetriever.retrieveElementsByScore(elementDescription, TOP_N_ELEMENTS_TO_RETRIEVE,
                 MIN_GENERAL_RETRIEVAL_SCORE);
         var matchingUiElements = retrievedElements.stream()
@@ -127,8 +115,8 @@ public class ElementLocator extends AbstractTools {
                 return of(promptUserForCreatingNewElement(elementDescription));
             }
         } else {
-            LOG.info("Found {} UI element(s) in DB corresponding to the description of '{}'.",
-                    matchingUiElements.size(), elementDescription);
+            LOG.info("Found {} UI element(s) in DB corresponding to the description of '{}'. Element names: {}",
+                    matchingUiElements.size(), elementDescription, matchingUiElements.stream().map(UiElement::name).toList());
             return findElementAndProcessLocationResult(() -> getFinalElementLocation(elementDescription, matchingUiElements),
                     elementDescription);
         }
@@ -241,13 +229,12 @@ public class ElementLocator extends AbstractTools {
         LOG.warn("The user decided to terminate the execution. Exiting...");
     }
 
-    @NotNull
     private static UiElementLocationResult getFinalElementLocation(String elementDescription, List<UiElement> matchingUiElements) {
         BufferedImage wholeScreenshot = captureScreen();
         var matchedBoundingBoxesByElement = matchingUiElements.stream()
                 .collect(toConcurrentMap(uiElement -> uiElement, uiElement -> {
                     var elementScreenshot = uiElement.screenshot().toBufferedImage();
-                    var boundingBoxes = findMatchingRegions(wholeScreenshot, elementScreenshot);
+                    var boundingBoxes = ImageMatchingUtil.findMatchingRegionsWithORB(wholeScreenshot, elementScreenshot);
                     return mergeOverlappingRectangles(boundingBoxes);
                 }));
         int visualMatchesAmount = matchedBoundingBoxesByElement.values().stream().mapToInt(Collection::size).sum();
@@ -262,7 +249,6 @@ public class ElementLocator extends AbstractTools {
         }
     }
 
-    @NotNull
     private static Rectangle promptUserForCreatingNewElement(String originalElementDescription) {
         BoundingBoxCaptureNeededPopup.display();
         sleepMillis(USER_DIALOG_DISMISS_DELAY_MILLIS);
@@ -350,7 +336,6 @@ public class ElementLocator extends AbstractTools {
         }
     }
 
-    @NotNull
     private static List<UiElementCandidate> getUiElementCandidates(BufferedImage resultingScreenshot,
                                                                    Map<Color, Rectangle> elementBoundingBoxesByLabel,
                                                                    List<PlottedUiElement> elementsToPlot) {
@@ -358,39 +343,10 @@ public class ElementLocator extends AbstractTools {
         return elementsToPlot.stream()
                 .map(el -> new UiElementCandidate(
                         el.id().toLowerCase(),
-                        //BoundingBoxUtil.LabelPosition.TOP.name(),
                         getColorName(el.elementColor).toLowerCase(),
                         el.uiElement().ownDescription(),
                         el.uiElement().anchorsDescription()))
                 .toList();
-    }
-
-    private static List<Rectangle> findMatchingRegions(BufferedImage wholeScreenshot, BufferedImage elementScreenshot) {
-        Mat source = imdecode(new MatOfByte(imageToByteArray(wholeScreenshot, "png")), Imgcodecs.IMREAD_COLOR);
-        Mat template = imdecode(new MatOfByte(imageToByteArray(elementScreenshot, "png")), Imgcodecs.IMREAD_COLOR);
-        Mat result = new Mat();
-        matchTemplate(source, template, result, Imgproc.TM_CCOEFF_NORMED);
-        List<MatchResult> matches = new ArrayList<>();
-        while (matches.size() < TOP_VISUAL_MATCHES_TO_FIND) {
-            var res = Core.minMaxLoc(result);
-            if (res.maxVal >= VISUAL_SIMILARITY_THRESHOLD) {
-                var maxLocation = res.maxLoc;
-                matches.add(new MatchResult(new Point((int) maxLocation.x, (int) maxLocation.y), res.maxVal));
-                Imgproc.floodFill(result, new Mat(), maxLocation, new Scalar(0));
-            } else {
-                break;
-            }
-        }
-
-        return matches.stream()
-                .sorted(Comparator.comparingDouble(MatchResult::score).reversed())
-                .limit(TOP_VISUAL_MATCHES_TO_FIND)
-                .map(match ->
-                        new Rectangle(match.point(), new Dimension(elementScreenshot.getWidth(), elementScreenshot.getHeight())))
-                .toList();
-    }
-
-    private record MatchResult(Point point, double score) {
     }
 
     private record PlottedUiElement(String id, Color elementColor, UiElement uiElement, Rectangle boundingBox) {
