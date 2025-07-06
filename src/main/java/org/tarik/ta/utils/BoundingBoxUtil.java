@@ -32,15 +32,12 @@ import static javax.imageio.ImageIO.write;
 
 
 public class BoundingBoxUtil {
-    private static final String SCREENSHOTS_SAVE_FOLDER = "screens";
-
-    public static void drawBoundingBoxes(BufferedImage image, Map<Color, Rectangle> rectangleByLabel,
-                                         boolean saveResults) {
+    public static void drawBoundingBoxes(BufferedImage image, Map<Color, Rectangle> rectangleByLabel) {
         OpenCvInitializer.initialize();
-        rectangleByLabel.forEach((boxColor, box) -> drawBoundingBox(image, box, boxColor, saveResults));
+        rectangleByLabel.forEach((boxColor, box) -> drawBoundingBox(image, box, boxColor));
     }
 
-    public static BoundingBoxInfo drawBoundingBox(BufferedImage image, Rectangle rectangle, Color boxColor, boolean saveResults) {
+    public static BoundingBoxInfo drawBoundingBox(BufferedImage image, Rectangle rectangle, Color boxColor) {
         OpenCvInitializer.initialize();
         Graphics2D g2d = image.createGraphics();
         try {
@@ -48,28 +45,10 @@ public class BoundingBoxUtil {
             g2d.setColor(boxColor);
             g2d.setStroke(new BasicStroke(boundingBoxLineStroke));
             g2d.drawRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-
-            if (saveResults) {
-                LocalDateTime now = LocalDateTime.now();
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH_mm_ss");
-                String timestamp = now.format(formatter);
-                var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
-                        .resolve("%s_%s.png".formatted(timestamp, boxColor.toString().replaceAll("[^a-zA-Z0-9]", "_"))).toAbsolutePath();
-                try {
-                    write(image, "png", filePath.toFile());
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
             return new BoundingBoxInfo(null);
         } finally {
             g2d.dispose();
         }
-    }
-
-    public static void drawBoundingBox(BufferedImage image, Rectangle boundingBox, Color boxColor) {
-        OpenCvInitializer.initialize();
-        drawBoundingBox(image, boundingBox, boxColor, false);
     }
 
     public static List<Rectangle> mergeOverlappingRectangles(Collection<Rectangle> rectangles) {

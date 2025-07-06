@@ -15,18 +15,17 @@
  */
 package org.tarik.ta.model;
 
-import com.google.cloud.vertexai.api.Schema;
 import dev.langchain4j.model.azure.AzureOpenAiChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.googleai.GeminiThinkingConfig;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.vertexai.gemini.VertexAiGeminiChatModel;
 import org.tarik.ta.AgentConfig;
+
 import java.util.List;
+
 import static java.util.Collections.singletonList;
 
-import static dev.langchain4j.model.chat.request.ResponseFormat.JSON;
-import static dev.langchain4j.model.chat.request.ResponseFormat.TEXT;
 import static org.tarik.ta.AgentConfig.*;
 
 public class ModelFactory {
@@ -39,6 +38,7 @@ public class ModelFactory {
     private static final ModelProvider MODEL_PROVIDER = AgentConfig.getModelProvider();
     private static final boolean LOG_MODEL_OUTPUTS = isModelLoggingEnabled();
     private static final boolean OUTPUT_THOUGHTS = isThinkingOutputEnabled();
+    private static final int GEMINI_THINKING_BUDGET = getGeminiThinkingBudget();
 
     public static GenAiModel getInstructionModel(boolean outputJson) {
         return switch (MODEL_PROVIDER) {
@@ -68,9 +68,9 @@ public class ModelFactory {
                     //.responseFormat(outputJson ? JSON : TEXT)
                     .thinkingConfig(GeminiThinkingConfig.builder()
                             .includeThoughts(outputThoughts)
-                            .thinkingBudget(20000)
+                            .thinkingBudget(GEMINI_THINKING_BUDGET)
                             .build())
-                    .listeners(singletonList(new ChatModelEventListener()))
+                    .listeners(List.of(new ChatModelEventListener()))
                     .build();
 
             case VERTEX_AI -> VertexAiGeminiChatModel.builder()
@@ -82,7 +82,7 @@ public class ModelFactory {
                     .temperature((float) TEMPERATURE)
                     .topP((float) TOP_P)
                     .logResponses(logResponses)
-                    .listeners(singletonList(new ChatModelEventListener()))
+                    .listeners(List.of(new ChatModelEventListener()))
                     .build();
         };
     }

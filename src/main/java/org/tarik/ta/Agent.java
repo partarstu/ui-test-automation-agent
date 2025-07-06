@@ -205,7 +205,7 @@ public class Agent {
                             toolExecutionInfoByToolName.put(toolToExecute.name(), toolExecutionResult.message());
                             return getFailedActionExecutionResult(toolExecutionInfoByToolName);
                         } else {
-                            LOG.info("Tool execution wasn't successful, retrying.");
+                            LOG.info("Tool execution wasn't successful, retrying. Root cause: {}", toolExecutionResult.message());
                             var nextRetryMoment = getNextRetryMoment();
                             if (nextRetryMoment.isBefore(deadline)) {
                                 waitUntil(nextRetryMoment);

@@ -17,16 +17,19 @@ package org.tarik.ta.tools;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static java.awt.Toolkit.getDefaultToolkit;
 import static java.awt.event.KeyEvent.*;
-import static java.awt.event.KeyEvent.VK_A;
-import static java.awt.event.KeyEvent.VK_BACK_SPACE;
 import static java.lang.Character.isUpperCase;
 import static java.util.Arrays.stream;
 import static java.util.stream.IntStream.range;
@@ -35,13 +38,15 @@ import static org.tarik.ta.tools.MouseTools.leftMouseClick;
 import static org.tarik.ta.utils.CommonUtils.*;
 
 public class KeyboardTools extends AbstractTools {
+    private static final Logger LOG = LoggerFactory.getLogger(KeyboardTools.class);
     private static final Map<String, Integer> actionableKeyCodeByNameMap = getActionableKeyCodesByName();
-    private static final int MAX_KEY_INDEX = 16000;
+    private static final int MAX_KEY_INDEX = 120000;
     private static final int KEYBOARD_ACTION_DELAY_MILLIS = 500;
 
     @Tool(value = "Presses the specified keyboard key. Use this tool when you need to press a single keyboard key.")
     public static ToolExecutionResult pressKey(@P(value = "The specific value of a keyboard key which needs to be pressed, e.g. 'Ctrl', " +
             "'Enter', 'A', '1', 'Shift' etc.") String keyboardKey) {
+        robot.setAutoDelay(50);
         if (keyboardKey == null || keyboardKey.isBlank()) {
             return getFailedToolExecutionResult("%s: In order to press a keyboard key it can't be empty"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
@@ -57,6 +62,7 @@ public class KeyboardTools extends AbstractTools {
     )
     public static ToolExecutionResult pressKeys(@P("A non-empty array of values each representing the keyboard key which needs to be " +
             "pressed, e.g. 'Ctrl', 'Enter', 'A', '1', 'Shift' etc.") String... keyboardKeys) {
+        robot.setAutoDelay(50);
         if (keyboardKeys == null || keyboardKeys.length == 0) {
             return getFailedToolExecutionResult("%s: In order to press keyboard keys combination it can't be empty"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
@@ -80,6 +86,7 @@ public class KeyboardTools extends AbstractTools {
             @P(value = "A boolean which defines if existing contents of the UI element, in which the text should be input, need to be " +
                     "wiped out before input", required = false)
             String wipeOutOldContent) {
+        robot.setAutoDelay(50);
         if (text == null) {
             return getFailedToolExecutionResult("%s: Text which needs to be input can't be NULL"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
@@ -91,10 +98,13 @@ public class KeyboardTools extends AbstractTools {
         }
 
         if (isNotBlank(elementDescription)) {
-            leftMouseClick(elementDescription);
+            var mouseResult = leftMouseClick(elementDescription);
+            if (mouseResult.executionStatus() != SUCCESS) {
+                return mouseResult;
+            }
         }
 
-        if(isBlank(wipeOutOldContent) || Boolean.parseBoolean(wipeOutOldContent)){
+        if (isBlank(wipeOutOldContent) || Boolean.parseBoolean(wipeOutOldContent)) {
             selectAndDeleteContent();
         }
 
@@ -102,7 +112,19 @@ public class KeyboardTools extends AbstractTools {
             try {
                 typeCharacter(ch);
             } catch (Exception e) {
-                return new ToolExecutionResult(ERROR, "Couldn't press the key '%s', original error: %s".formatted(ch, e), true);
+                LOG.warn("Couldn't type '{}' character using keyboard keys, falling back to copy-paste.", ch);
+                // Fallback option - copy-paste using clipboard
+                try {
+                    getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(String.valueOf(ch)), null);
+                    robot.keyPress(VK_CONTROL);
+                    robot.keyPress(VK_V);
+                    robot.keyRelease(VK_CONTROL);
+                    robot.keyRelease(VK_V);
+                } catch (Exception ex) {
+                    String message = "Got error while copy-pasting '%s' character.".formatted(ch);
+                    LOG.error(message, e);
+                    return getFailedToolExecutionResult("Couldn't press the key '%s', original error: %s".formatted(ch, e), true);
+                }
             }
         }
         return getSuccessfulResult("Input the following text using keyboard: %s".formatted(text));
@@ -119,7 +141,7 @@ public class KeyboardTools extends AbstractTools {
     }
 
     private static void typeCharacter(char ch) {
-        int keyCode = getKeyCode(ch);
+        int keyCode = getKeyCode(ch).orElseGet(() -> getKeyCode(String.valueOf(ch)));
         if (isUpperCase(ch)) {
             robot.keyPress(VK_SHIFT);
         }
@@ -137,14 +159,16 @@ public class KeyboardTools extends AbstractTools {
         return actionableKeyCodeByNameMap.get(keyboardKeyName.toLowerCase());
     }
 
-    private static int getKeyCode(char character) {
-        return KeyEvent.getExtendedKeyCodeForChar(character);
-    }
-
     private static Map<String, Integer> getActionableKeyCodesByName() {
         Map<String, Integer> result = new HashMap<>();
         range(0, MAX_KEY_INDEX)
-                .forEach(ind -> result.put(getKeyText(ind).toLowerCase(), ind));
+                .filter(ind -> !getKeyText(ind).toLowerCase().contains("unknown"))
+                .filter(ind -> ind != VK_UNDEFINED)
+                .forEach(ind -> result.put(getKeyText(ind), ind));
         return result;
+    }
+
+    private static Optional<Integer> getKeyCode(char c) {
+        return Optional.of(KeyEvent.getExtendedKeyCodeForChar(c)).filter(code -> code != VK_UNDEFINED);
     }
 }

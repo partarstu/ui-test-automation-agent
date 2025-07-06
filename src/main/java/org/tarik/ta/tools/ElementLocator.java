@@ -32,6 +32,10 @@ import org.tarik.ta.user_dialogs.*;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +52,7 @@ import static java.util.UUID.randomUUID;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toConcurrentMap;
 import static java.util.stream.Collectors.toMap;
+import static javax.imageio.ImageIO.write;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static org.tarik.ta.model.ModelFactory.getVisionModel;
 import static org.tarik.ta.utils.BoundingBoxUtil.drawBoundingBoxes;
@@ -82,6 +87,7 @@ public class ElementLocator extends AbstractTools {
             Color.CYAN,
             Color.MAGENTA
     );
+    private static final String SCREENSHOTS_SAVE_FOLDER = "screens";
 
     public static Optional<Rectangle> locateElementOnTheScreen(String elementDescription) {
         var retrievedElements = elementRetriever.retrieveElementsByScore(elementDescription, TOP_N_ELEMENTS_TO_RETRIEVE,
@@ -234,7 +240,8 @@ public class ElementLocator extends AbstractTools {
         var matchedBoundingBoxesByElement = matchingUiElements.stream()
                 .collect(toConcurrentMap(uiElement -> uiElement, uiElement -> {
                     var elementScreenshot = uiElement.screenshot().toBufferedImage();
-                    var boundingBoxes = ImageMatchingUtil.findMatchingRegionsWithORB(wholeScreenshot, elementScreenshot);
+                    var boundingBoxes = ImageMatchingUtil.findMatchingRegions(wholeScreenshot, elementScreenshot);
+                    //var boundingBoxes = ImageMatchingUtil.findMatchingRegionsWithORB(wholeScreenshot, elementScreenshot);
                     return mergeOverlappingRectangles(boundingBoxes);
                 }));
         int visualMatchesAmount = matchedBoundingBoxesByElement.values().stream().mapToInt(Collection::size).sum();
@@ -302,11 +309,18 @@ public class ElementLocator extends AbstractTools {
                                 colorsToUse.removeFirst(), boxesByElement.getKey(), box)))
                 .toList();
         var resultingScreenshot = cloneImage(screenshot);
-        Map<Color, Rectangle> elementBoundingBoxesByLabel = elementsToPlot.stream()
-                .collect(toMap(PlottedUiElement::elementColor, PlottedUiElement::boundingBox));
 
         // Now asking the model to identify the element which is the best fit to the target description
-        var uiElementCandidates = getUiElementCandidates(resultingScreenshot, elementBoundingBoxesByLabel, elementsToPlot);
+        Map<Color, Rectangle> elementBoundingBoxesByLabel = elementsToPlot.stream()
+                .collect(toMap(PlottedUiElement::elementColor, PlottedUiElement::boundingBox));
+        markElementsToPlotWithBoundingBoxes(resultingScreenshot, elementBoundingBoxesByLabel);
+        var uiElementCandidates = elementsToPlot.stream()
+                .map(el -> new UiElementCandidate(
+                        el.id().toLowerCase(),
+                        getColorName(el.elementColor).toLowerCase(),
+                        el.uiElement().ownDescription(),
+                        el.uiElement().anchorsDescription()))
+                .toList();
         var prompt = BestMatchingUiElementIdentificationPrompt.builder()
                 .withUiElementCandidates(uiElementCandidates)
                 .withTargetElementDescription(targetElementDescription)
@@ -336,17 +350,21 @@ public class ElementLocator extends AbstractTools {
         }
     }
 
-    private static List<UiElementCandidate> getUiElementCandidates(BufferedImage resultingScreenshot,
-                                                                   Map<Color, Rectangle> elementBoundingBoxesByLabel,
-                                                                   List<PlottedUiElement> elementsToPlot) {
-        drawBoundingBoxes(resultingScreenshot, elementBoundingBoxesByLabel, IS_IN_TEST_MODE);
-        return elementsToPlot.stream()
-                .map(el -> new UiElementCandidate(
-                        el.id().toLowerCase(),
-                        getColorName(el.elementColor).toLowerCase(),
-                        el.uiElement().ownDescription(),
-                        el.uiElement().anchorsDescription()))
-                .toList();
+    private static void markElementsToPlotWithBoundingBoxes(BufferedImage resultingScreenshot,
+                                                                                Map<Color, Rectangle> elementBoundingBoxesByLabel) {
+        drawBoundingBoxes(resultingScreenshot, elementBoundingBoxesByLabel);
+        if (IS_IN_TEST_MODE) {
+            LocalDateTime now = LocalDateTime.now();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH_mm_ss");
+            String timestamp = now.format(formatter);
+            var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
+                    .resolve("%s.png".formatted(timestamp)).toAbsolutePath();
+            try {
+                write(resultingScreenshot, "png", filePath.toFile());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     private record PlottedUiElement(String id, Color elementColor, UiElement uiElement, Rectangle boundingBox) {

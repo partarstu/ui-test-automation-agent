@@ -81,6 +81,7 @@ public class AgentConfig {
     private static final double TOP_P = loadPropertyAsDouble("model.top.p", "TOP_P", "1.0");
     private static final boolean MODEL_LOGGING_ENABLED = parseBoolean(getProperty("model.logging.enabled", "LOG_MODEL_OUTPUT", "false"));
     private static final boolean THINKING_OUTPUT_ENABLED = parseBoolean(getProperty("thinking.output.enabled", "OUTPUT_THINKING", "false"));
+    private static final int GEMINI_THINKING_BUDGET = loadPropertyAsInteger("gemini.thinking.budget", "GEMINI_THINKING_BUDGET", "5000");
     private static final int MAX_RETRIES = loadPropertyAsInteger("model.max.retries", "MAX_RETRIES", "10");
 
     // Google API Config (Only relevant if model.provider is Google)
@@ -156,6 +157,9 @@ public class AgentConfig {
     }
     public static boolean isThinkingOutputEnabled() {
         return THINKING_OUTPUT_ENABLED;
+    }
+    public static int getGeminiThinkingBudget() {
+        return GEMINI_THINKING_BUDGET;
     }
     public static int getMaxRetries() {
         return MAX_RETRIES;
