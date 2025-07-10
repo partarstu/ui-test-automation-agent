@@ -37,7 +37,8 @@ public class AgentConfig {
     private static final Properties properties = loadProperties();
     public enum ModelProvider {
         GOOGLE,
-        OPENAI
+        OPENAI,
+        GROQ
     }
 
     public enum GoogleApiProvider {
@@ -97,6 +98,10 @@ public class AgentConfig {
     // OpenAI API Config
     private static final String OPENAI_API_KEY = getRequiredProperty("azure.openai.api.key", "OPENAI_API_KEY");
     private static final String OPENAI_API_ENDPOINT = getRequiredProperty("azure.openai.endpoint", "OPENAI_API_ENDPOINT");
+
+    // OpenAI API Config
+    private static final String GROQ_API_KEY = getRequiredProperty("groq.api.key", "GROQ_API_KEY");
+    private static final String GROQ_API_ENDPOINT = getRequiredProperty("groq.endpoint", "GROQ_ENDPOINT");
 
     // Timeout and Retry Config
     private static final int TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS = loadPropertyAsInteger("test.step.execution.retry.timeout.millis", "TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS", "10000");
@@ -164,6 +169,7 @@ public class AgentConfig {
     public static int getMaxRetries() {
         return MAX_RETRIES;
     }
+
     // -----------------------------------------------------
     // Google API Config (Only relevant if model.provider is Google)
     public static GoogleApiProvider getGoogleApiProvider() {
@@ -178,6 +184,7 @@ public class AgentConfig {
     public static String getGoogleLocation() {
         return GOOGLE_LOCATION;
     }
+
     // -----------------------------------------------------
     // OpenAI API Config
     public static String getOpenAiApiKey() {
@@ -186,6 +193,16 @@ public class AgentConfig {
     public static String getOpenAiEndpoint() {
         return OPENAI_API_ENDPOINT;
     }
+
+    // -----------------------------------------------------
+    // Groq API Config
+    public static String getGroqApiKey() {
+        return GROQ_API_KEY;
+    }
+    public static String getGroqEndpoint() {
+        return GROQ_API_ENDPOINT;
+    }
+
     // -----------------------------------------------------
     // Timeout and Retry Config
     public static int getTestStepExecutionRetryTimeoutMillis() {
@@ -200,6 +217,7 @@ public class AgentConfig {
     public static int getActionVerificationDelayMillis() {
         return ACTION_VERIFICATION_DELAY_MILLIS;
     }
+
     // -----------------------------------------------------
     // Element Config
     private static final String ELEMENT_BOUNDING_BOX_COLOR_NAME = getRequiredProperty("element.bounding.box.color", "BOUNDING_BOX_COLOR"); // Element Config
@@ -224,6 +242,7 @@ public class AgentConfig {
     public static int getElementLocatorTopVisualMatches() {
         return ELEMENT_LOCATOR_TOP_VISUAL_MATCHES;
     }
+
     // -----------------------------------------------------
     // User UI dialogs
     private static final int DIALOG_DEFAULT_HORIZONTAL_GAP = loadPropertyAsInteger("dialog.default.horizontal.gap", "DIALOG_DEFAULT_HORIZONTAL_GAP", "10");

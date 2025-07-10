@@ -20,7 +20,6 @@ import dev.langchain4j.agent.tool.Tool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
 import java.util.HashMap;
@@ -42,11 +41,12 @@ public class KeyboardTools extends AbstractTools {
     private static final Map<String, Integer> actionableKeyCodeByNameMap = getActionableKeyCodesByName();
     private static final int MAX_KEY_INDEX = 120000;
     private static final int KEYBOARD_ACTION_DELAY_MILLIS = 500;
+    private static final int AUTO_DELAY = 50;
 
     @Tool(value = "Presses the specified keyboard key. Use this tool when you need to press a single keyboard key.")
     public static ToolExecutionResult pressKey(@P(value = "The specific value of a keyboard key which needs to be pressed, e.g. 'Ctrl', " +
             "'Enter', 'A', '1', 'Shift' etc.") String keyboardKey) {
-        robot.setAutoDelay(50);
+        robot.setAutoDelay(AUTO_DELAY);
         if (keyboardKey == null || keyboardKey.isBlank()) {
             return getFailedToolExecutionResult("%s: In order to press a keyboard key it can't be empty"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
@@ -62,7 +62,7 @@ public class KeyboardTools extends AbstractTools {
     )
     public static ToolExecutionResult pressKeys(@P("A non-empty array of values each representing the keyboard key which needs to be " +
             "pressed, e.g. 'Ctrl', 'Enter', 'A', '1', 'Shift' etc.") String... keyboardKeys) {
-        robot.setAutoDelay(50);
+        robot.setAutoDelay(AUTO_DELAY);
         if (keyboardKeys == null || keyboardKeys.length == 0) {
             return getFailedToolExecutionResult("%s: In order to press keyboard keys combination it can't be empty"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
@@ -86,11 +86,12 @@ public class KeyboardTools extends AbstractTools {
             @P(value = "A boolean which defines if existing contents of the UI element, in which the text should be input, need to be " +
                     "wiped out before input", required = false)
             String wipeOutOldContent) {
-        robot.setAutoDelay(50);
+        robot.setAutoDelay(AUTO_DELAY);
         if (text == null) {
             return getFailedToolExecutionResult("%s: Text which needs to be input can't be NULL"
                     .formatted(KeyboardTools.class.getSimpleName()), true);
         }
+
         if (isNotBlank(wipeOutOldContent) && !List.of("true", "false").contains(wipeOutOldContent.trim().toLowerCase())) {
             return getFailedToolExecutionResult(("%s: Got incorrect value for the variable which defines if the content should be wiped " +
                     "out. Expected boolean value, got : {%s}")
@@ -112,7 +113,7 @@ public class KeyboardTools extends AbstractTools {
             try {
                 typeCharacter(ch);
             } catch (Exception e) {
-                LOG.warn("Couldn't type '{}' character using keyboard keys, falling back to copy-paste.", ch);
+                LOG.info("Couldn't type '{}' character using keyboard keys, falling back to copy-paste.", ch);
                 // Fallback option - copy-paste using clipboard
                 try {
                     getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(String.valueOf(ch)), null);
@@ -129,6 +130,25 @@ public class KeyboardTools extends AbstractTools {
         }
         return getSuccessfulResult("Input the following text using keyboard: %s".formatted(text));
     }
+
+    @Tool(value = "Clears (wipes out) data inside the specified input field.")
+    public static ToolExecutionResult clearData(
+            @P(value = "Detailed description of the UI element which needs to have the content cleared.")
+            String elementDescription) {
+        robot.setAutoDelay(AUTO_DELAY);
+        if (isBlank(elementDescription)) {
+            return new ToolExecutionResult(ERROR, "%s: Can't clear the contents of an element without any description"
+                    .formatted(MouseTools.class.getSimpleName()), true);
+        }
+
+        var mouseResult = leftMouseClick(elementDescription);
+        if (mouseResult.executionStatus() != SUCCESS) {
+            return mouseResult;
+        }
+        selectAndDeleteContent();
+        return getSuccessfulResult("Cleared the contents of %s".formatted(elementDescription));
+    }
+
 
     private static void selectAndDeleteContent() {
         robot.keyPress(VK_CONTROL);

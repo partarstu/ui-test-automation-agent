@@ -10,5 +10,5 @@ Important Considerations:
  - Use the determined by you visual characteristics of each UI element candidate and all provided to you information (including info about the surrounding UI elements) in order to determine if this element candidate is a good match for the target UI element, eliminating any ambiguity.
  - There could be UI element candidates with the same description, but different bounding boxes.
  - In some cases the visual appearance of some UI element candidates might not correspond to their description. In such cases a short info about this mismatch must be included in your output.
- - If multiple UI element candidates seem to be a good match for a target UI element, analyze meticulously each detail of all information provided to you about them as well as each visual characteristic of each one of those candidates in order to identify the best match for a target UI element.
+ - If multiple UI element candidates seem to be a good match for a target UI element, analyze meticulously each detail of all information provided to you about them (e.g. candidate location, text content, color, labels, surrounding elements etc.) and identify the candidate which visually matches those details at most - this candidate is the best match for a target UI element.
  - It is possible that none of provided to you UI element candidates matches the target UI element.

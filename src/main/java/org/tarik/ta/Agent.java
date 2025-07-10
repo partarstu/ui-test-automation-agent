@@ -123,7 +123,7 @@ public class Agent {
             String actionInstructionWithData = actionInstruction;
             if (testData != null && !testData.isEmpty() && testData.stream().anyMatch(CommonUtils::isNotBlank)) {
                 var nonEmptyTestData = testData.stream().filter(CommonUtils::isNotBlank).toList();
-                actionInstructionWithData += " using following input data: '%s'".formatted(join("', '", nonEmptyTestData));
+                actionInstructionWithData += ". Use following input data: '%s'".formatted(join("', '", nonEmptyTestData));
             }
 
             try {
@@ -133,23 +133,26 @@ public class Agent {
                     var errorMessage = "Failure while executing action '%s'. Root cause: %s"
                             .formatted(actionInstructionWithData, actionResult.message());
                     addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, null, executionStartTimestamp, now());
-                    return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null,
+                    return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, captureScreen(),
                             testExecutionStartTimestamp, now(), errorMessage);
                 }
-                String actualResult = null;
+                LOG.info("Action execution complete.");
 
+                String actualResult = null;
                 if (isNotBlank(verificationInstruction)) {
                     sleepMillis(ACTION_VERIFICATION_DELAY_MILLIS);
                     var finalInstruction = "Verify that %s".formatted(verificationInstruction);
-                    var verificationResult = processVerificationRequest(finalInstruction);
+                    LOG.info("Executing verification: '{}'", finalInstruction);
+                    var verificationResult = processVerificationRequest(finalInstruction, actionInstructionWithData);
                     if (!verificationResult.success()) {
                         var errorMessage = "Verifying that '%s' failed. %s"
                                 .formatted(verificationInstruction, verificationResult.message());
                         addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, verificationResult.message(),
                                 executionStartTimestamp, now());
-                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, null, testExecutionStartTimestamp, now(),
+                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp, now(),
                                 errorMessage);
                     }
+                    LOG.info("Verification execution complete.");
                     actualResult = verificationResult.message();
                 }
 
@@ -157,11 +160,11 @@ public class Agent {
             } catch (Exception e) {
                 LOG.error("Unexpected error while executing the test step: '{}'", testStep.stepDescription(), e);
                 addFailedTestStepWithScreenshot(testStep, stepResults, e.getMessage(), null, now(), now());
-                return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null, testExecutionStartTimestamp,
+                return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, captureScreen(), testExecutionStartTimestamp,
                         now(), e.getMessage());
             }
         }
-        return new TestExecutionResult(testCase.name(), PASSED, stepResults, captureScreen(), testExecutionStartTimestamp, now(), null);
+        return new TestExecutionResult(testCase.name(), PASSED, stepResults, null, testExecutionStartTimestamp, now(), null);
     }
 
     private static void addFailedTestStepWithScreenshot(TestStep testStep, List<TestStepResult> stepResults, String errorMessage,
@@ -242,10 +245,12 @@ public class Agent {
     }
 
 
-    private static VerificationExecutionResult processVerificationRequest(String verification) {
+    private static VerificationExecutionResult processVerificationRequest(@NotNull String verification,
+                                                                          @NotNull String actionIncludingData) {
         return executeWithRetries(VERIFICATION_RETRY_TIMEOUT_MILLIS, VERIFICATION_EXECUTION, (model) -> {
             var prompt = VerificationExecutionPrompt.builder()
                     .withVerificationDescription(verification)
+                    .withActionDescription(actionIncludingData)
                     .screenshot(captureScreen())
                     .build();
             LOG.info("'{}'", verification);

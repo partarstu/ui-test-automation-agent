@@ -72,10 +72,16 @@ public class VerificationExecutionPrompt extends StructuredResponsePrompt<Verifi
 
     public static class Builder {
         private String verificationDescription;
+        private String actionDescription;
         private BufferedImage screenshot;
 
         public Builder withVerificationDescription(@NotNull String verificationDescription) {
             this.verificationDescription = verificationDescription;
+            return this;
+        }
+
+        public Builder withActionDescription(@NotNull String actionDescription) {
+            this.actionDescription = actionDescription;
             return this;
         }
 
@@ -86,7 +92,12 @@ public class VerificationExecutionPrompt extends StructuredResponsePrompt<Verifi
 
         public VerificationExecutionPrompt build() {
             checkArgument(isNotBlank(verificationDescription), "Verification description must be set");
-            return new VerificationExecutionPrompt(Map.of(), Map.of(VERIFICATION_DESCRIPTION_PLACEHOLDER, verificationDescription),
+            checkArgument(isNotBlank(actionDescription), "Action description must be set");
+            return new VerificationExecutionPrompt(
+                    Map.of(),
+                    Map.of(
+                            VERIFICATION_DESCRIPTION_PLACEHOLDER, verificationDescription,
+                            ACTION_DESCRIPTION_PLACEHOLDER, actionDescription),
                     screenshot);
         }
     }

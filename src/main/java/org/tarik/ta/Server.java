@@ -29,6 +29,7 @@ public class Server {
     private static final long MAX_REQUEST_SIZE = 10000000;
     private static final String MAIN_PATH = "/";
     private static final String AGENT_CARD_PATH = "/.well-known/agent.json";
+    private static final boolean UNATTENDED_MODE = AgentConfig.isUnattendedMode();
 
     public static void main(String[] args) {
         int port = getStartPort();
@@ -42,6 +43,6 @@ public class Server {
                 .get(AGENT_CARD_PATH, agentExecutionResource::getAgentCard)
                 .start(port);
 
-        LOG.info("Agent server started on port: {}", port);
+        LOG.info("Agent server started on port: {} in {} mode", port, UNATTENDED_MODE ? "unattended" : "attended");
     }
 }

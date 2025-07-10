@@ -22,15 +22,9 @@ import org.tarik.ta.utils.ImageUtils;
 
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static dev.langchain4j.data.message.ImageContent.DetailLevel.HIGH;
@@ -90,9 +84,5 @@ public abstract class AbstractPrompt {
 
     protected static String getSystemPromptFileContent(String name) {
         return getPromptFileContent("%s/%s".formatted(SYSTEM_PROMPTS_ROOT_FOLDER, name));
-    }
-
-    protected static String getUserPromptFileContent(String name) {
-        return getPromptFileContent("%s/%s".formatted(USER_PROMPTS_ROOT_FOLDER, name));
     }
 }

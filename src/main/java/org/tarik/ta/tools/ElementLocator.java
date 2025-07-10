@@ -24,6 +24,7 @@ import org.tarik.ta.prompts.BestMatchingUiElementIdentificationPrompt.UiElementC
 import org.tarik.ta.prompts.ElementDescriptionPrompt;
 import org.tarik.ta.rag.RetrieverFactory;
 import org.tarik.ta.prompts.BestMatchingUiElementIdentificationPrompt;
+import org.tarik.ta.prompts.ElementBoundingBoxPrompt;
 import org.tarik.ta.rag.model.UiElement;
 import org.tarik.ta.rag.model.UiElement.Screenshot;
 import org.tarik.ta.rag.UiElementRetriever;
@@ -36,27 +37,28 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Collection;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import java.util.LinkedList;
 
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Optional.empty;
-import static java.util.Optional.of;
+import static java.time.format.DateTimeFormatter.ofPattern;
+import static java.util.Optional.*;
 import static java.util.UUID.randomUUID;
+import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toConcurrentMap;
 import static java.util.stream.Collectors.toMap;
 import static javax.imageio.ImageIO.write;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static org.tarik.ta.model.ModelFactory.getVisionModel;
+import static org.tarik.ta.tools.ImageMatchingUtil.findMatchingRegionsWithORB;
+import static org.tarik.ta.utils.BoundingBoxUtil.drawBoundingBox;
 import static org.tarik.ta.utils.BoundingBoxUtil.drawBoundingBoxes;
-import static org.tarik.ta.utils.BoundingBoxUtil.mergeOverlappingRectangles;
 import static org.tarik.ta.utils.CommonUtils.captureScreen;
 import static org.tarik.ta.utils.CommonUtils.getColorByName;
 import static org.tarik.ta.utils.CommonUtils.getColorName;
@@ -188,14 +190,24 @@ public class ElementLocator extends AbstractTools {
                 "matches the description '%s'. Either this is a bug, or the UI has been modified and the saved in DB UI element " +
                 "info is obsolete. Do you wish to refine the UI element info or to terminate the execution ?")
                 .formatted(elementDescription);
-        return processNoElementFoundCaseInAttendedMode(elementDescription, elementsUsed, rootCause);
+        if (UNATTENDED_MODE) {
+            LOG.warn(rootCause);
+            return empty();
+        } else {
+            return processNoElementFoundCaseInAttendedMode(elementDescription, elementsUsed, rootCause);
+        }
     }
 
     private static Optional<Rectangle> processNoPatternMatchesCase(String elementDescription, Collection<UiElement> elementsUsed) {
         var rootCause = ("Visual pattern matching provided no results within deadline. Either this is a bug, or most probably " +
                 "the UI has been modified and the saved in DB UI element info is obsolete. The element description is: '%s'. Do " +
                 "you wish to refine the UI element info or to terminate the execution ?").formatted(elementDescription);
-        return processNoElementFoundCaseInAttendedMode(elementDescription, elementsUsed, rootCause);
+        if (UNATTENDED_MODE) {
+            LOG.warn(rootCause);
+            return empty();
+        } else {
+            return processNoElementFoundCaseInAttendedMode(elementDescription, elementsUsed, rootCause);
+        }
     }
 
     private static Optional<Rectangle> processNoElementFoundCaseInAttendedMode(String elementDescription,
@@ -237,13 +249,47 @@ public class ElementLocator extends AbstractTools {
 
     private static UiElementLocationResult getFinalElementLocation(String elementDescription, List<UiElement> matchingUiElements) {
         BufferedImage wholeScreenshot = captureScreen();
-        var matchedBoundingBoxesByElement = matchingUiElements.stream()
-                .collect(toConcurrentMap(uiElement -> uiElement, uiElement -> {
-                    var elementScreenshot = uiElement.screenshot().toBufferedImage();
-                    var boundingBoxes = ImageMatchingUtil.findMatchingRegions(wholeScreenshot, elementScreenshot);
-                    //var boundingBoxes = ImageMatchingUtil.findMatchingRegionsWithORB(wholeScreenshot, elementScreenshot);
-                    return mergeOverlappingRectangles(boundingBoxes);
-                }));
+        var elementBoundingBoxPrompt = ElementBoundingBoxPrompt.builder()
+                .withElementDescription(elementDescription)
+                .withScreenshot(wholeScreenshot)
+                .build();
+        try (var model = getVisionModel(true)) {
+            var identifiedBoundingBoxFuture = supplyAsync(() ->
+                    model.generateAndGetResponseAsObject(elementBoundingBoxPrompt, "getting bounding box from vision model"));
+            var matchedBoundingBoxesByElementFuture = supplyAsync(() ->
+                    matchingUiElements.stream()
+                            .collect(toConcurrentMap(uiElement -> uiElement, uiElement -> {
+                                var elementScreenshot = uiElement.screenshot().toBufferedImage();
+                                return findMatchingRegionsWithORB(wholeScreenshot, elementScreenshot);
+                            })));
+            var identifiedBoundingBox = identifiedBoundingBoxFuture.join();
+            LOG.info("Model has identified bounding box : {}.", identifiedBoundingBox);
+            if (IS_IN_TEST_MODE && identifiedBoundingBox != null) {
+                var resultingScreenshot = cloneImage(wholeScreenshot);
+                drawBoundingBox(resultingScreenshot, identifiedBoundingBox.getActualBoundingBox(wholeScreenshot.getWidth(),
+                        wholeScreenshot.getHeight()), BOUNDING_BOX_COLOR);
+                saveScreenshot(resultingScreenshot, "vision");
+            }
+
+            var matchedBoundingBoxesByElement = matchedBoundingBoxesByElementFuture.join();
+            var bestMatch = chooseBestVisualMatch(elementDescription, matchingUiElements, matchedBoundingBoxesByElement,
+                    wholeScreenshot);
+            return ofNullable(identifiedBoundingBox)
+                    .map(box -> box.getActualBoundingBox(wholeScreenshot.getWidth(), wholeScreenshot.getHeight()))
+                    .flatMap(box -> matchedBoundingBoxesByElement.values().stream()
+                            .flatMap(Collection::stream)
+                            .map(r -> r.intersection(box))
+                            .filter(r -> !r.isEmpty())
+                            .max(Comparator.comparingInt(r -> -r.width * r.height))
+                            .map(identifiedElement ->
+                                    new UiElementLocationResult(true, true, identifiedElement, matchingUiElements)))
+                    .orElseGet(() -> bestMatch);
+        }
+    }
+
+    private static UiElementLocationResult chooseBestVisualMatch(String elementDescription, List<UiElement> matchingUiElements,
+                                                                 ConcurrentMap<UiElement, List<Rectangle>> matchedBoundingBoxesByElement,
+                                                                 BufferedImage wholeScreenshot) {
         int visualMatchesAmount = matchedBoundingBoxesByElement.values().stream().mapToInt(Collection::size).sum();
         var elementNames = matchedBoundingBoxesByElement.keySet().stream().map(UiElement::name).collect(joining("', '", "'", "'"));
         if (visualMatchesAmount < 1) {
@@ -321,6 +367,7 @@ public class ElementLocator extends AbstractTools {
                         el.uiElement().ownDescription(),
                         el.uiElement().anchorsDescription()))
                 .toList();
+        LOG.info("Candidates: {}", uiElementCandidates);
         var prompt = BestMatchingUiElementIdentificationPrompt.builder()
                 .withUiElementCandidates(uiElementCandidates)
                 .withTargetElementDescription(targetElementDescription)
@@ -351,19 +398,23 @@ public class ElementLocator extends AbstractTools {
     }
 
     private static void markElementsToPlotWithBoundingBoxes(BufferedImage resultingScreenshot,
-                                                                                Map<Color, Rectangle> elementBoundingBoxesByLabel) {
+                                                            Map<Color, Rectangle> elementBoundingBoxesByLabel) {
         drawBoundingBoxes(resultingScreenshot, elementBoundingBoxesByLabel);
         if (IS_IN_TEST_MODE) {
-            LocalDateTime now = LocalDateTime.now();
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH_mm_ss");
-            String timestamp = now.format(formatter);
-            var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
-                    .resolve("%s.png".formatted(timestamp)).toAbsolutePath();
-            try {
-                write(resultingScreenshot, "png", filePath.toFile());
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            saveScreenshot(resultingScreenshot, "opencv");
+        }
+    }
+
+    private static void saveScreenshot(BufferedImage resultingScreenshot, String postfix) {
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = ofPattern("yyyy_MM_dd_HH_mm_ss");
+        String timestamp = now.format(formatter);
+        var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
+                .resolve("%s_%s.png".formatted(timestamp, postfix)).toAbsolutePath();
+        try {
+            write(resultingScreenshot, "png", filePath.toFile());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 

@@ -39,8 +39,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static java.lang.Math.min;
 import static java.util.Comparator.comparingDouble;
 import static java.util.stream.Collectors.toList;
+import static org.opencv.calib3d.Calib3d.findHomography;
+import static org.opencv.core.Core.countNonZero;
+import static org.opencv.core.Core.perspectiveTransform;
+import static org.opencv.features2d.ORB.*;
 import static org.opencv.imgcodecs.Imgcodecs.imdecode;
 import static org.opencv.imgproc.Imgproc.floodFill;
 import static org.opencv.imgproc.Imgproc.matchTemplate;
@@ -51,10 +56,29 @@ public class ImageMatchingUtil {
     private static final Logger LOG = LoggerFactory.getLogger(ImageMatchingUtil.class);
     private static final double VISUAL_SIMILARITY_THRESHOLD = AgentConfig.getElementLocatorVisualSimilarityThreshold();
     private static final int TOP_VISUAL_MATCHES_TO_FIND = AgentConfig.getElementLocatorTopVisualMatches();
+    private static final int MIN_GOOD_FEATURE_MATCHES = 10;
+    private static final float LOWE_RATIO_THRESHOLD = 0.75f;
+    private static final int KNN_MATCHES_PER_QUERY = 2;
+    private static final int MINIMUM_CLUSTER_POPULATION = 5;
+    private static final int MINIMUM_POINTS_FOR_HOMOGRAPHY = 6;
+
+    // ORB parameters
+    private static final int ORB_MAX_FEATURES = 150000;
+    private static final float ORB_SCALE_FACTOR = 1.05f;
+    private static final int ORB_N_LEVELS = 12;
+    private static final int ORB_EDGE_THRESHOLD = 8;
+    private static final int ORB_FIRST_LEVEL = 0;
+    private static final int ORB_WTA_K = 2;
+    private static final int ORB_PATCH_SIZE = 31;
+    private static final int ORB_FAST_THRESHOLD = 6;
+
+    private static ORB ORB;
     private static boolean initialized = false;
 
     private static boolean initializeOpenCv() {
         Loader.load(opencv_java.class);
+        ORB = create(ORB_MAX_FEATURES, ORB_SCALE_FACTOR, ORB_N_LEVELS, ORB_EDGE_THRESHOLD, ORB_FIRST_LEVEL, ORB_WTA_K, HARRIS_SCORE,
+                ORB_PATCH_SIZE, ORB_FAST_THRESHOLD);
         return true;
     }
 
@@ -86,213 +110,141 @@ public class ImageMatchingUtil {
                 .toList();
     }
 
+    public static List<Rectangle> findMatchingRegionsWithORB(BufferedImage wholeScreenshot, BufferedImage elementScreenshot) {
+        if (!initialized) {
+            initialized = initializeOpenCv();
+        }
+
+        // Step 1: Convert BufferedImages to OpenCV Mat format (grayscale is sufficient for feature matching)
+        Mat wholeMat = imdecode(new MatOfByte(imageToByteArray(wholeScreenshot, "png")), Imgcodecs.IMREAD_GRAYSCALE);
+        Mat elementMat = imdecode(new MatOfByte(imageToByteArray(elementScreenshot, "png")), Imgcodecs.IMREAD_GRAYSCALE);
+
+        if (elementMat.empty() || wholeMat.empty()) {
+            LOG.error("Cannot read images, one or both are empty.");
+            return Collections.emptyList();
+        }
+
+        // Step 2: Detect keypoints and compute descriptors using ORB
+        // Using a high number of features to increase chances of finding matches in UI elements
+        MatOfKeyPoint keypointsElement = new MatOfKeyPoint();
+        Mat descriptorsElement = new Mat();
+        ORB.detectAndCompute(elementMat, new Mat(), keypointsElement, descriptorsElement);
+
+        MatOfKeyPoint keypointsWhole = new MatOfKeyPoint();
+        Mat descriptorsWhole = new Mat();
+        ORB.detectAndCompute(wholeMat, new Mat(), keypointsWhole, descriptorsWhole);
+
+        if (descriptorsElement.empty() || descriptorsWhole.empty()) {
+            LOG.warn("No descriptors found in one or both images.");
+            return Collections.emptyList();
+        }
+
+        // Step 3: Match descriptors using a Brute-Force matcher with KNN
+        DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
+        List<MatOfDMatch> knnMatches = new ArrayList<>();
+        matcher.knnMatch(descriptorsElement, descriptorsWhole, knnMatches, KNN_MATCHES_PER_QUERY);
+
+        // Step 4: Filter good matches using Lowe's ratio test
+        List<DMatch> goodMatchesList = new ArrayList<>();
+        for (MatOfDMatch knnMatch : knnMatches) {
+            DMatch[] matches = knnMatch.toArray();
+            if (matches.length > 1 && matches[0].distance < LOWE_RATIO_THRESHOLD * matches[1].distance) {
+                goodMatchesList.add(matches[0]);
+            }
+        }
+
+        if (goodMatchesList.size() < MIN_GOOD_FEATURE_MATCHES) {
+            LOG.info("Not enough good matches found ({}) to form reliable clusters.", goodMatchesList.size());
+            return Collections.emptyList();
+        }
+
+        // Step 5: Cluster good matches using DBSCAN to find distinct regions
+        List<KeyPoint> wholeKeyPointsList = keypointsWhole.toList();
+        List<KeyPointClusterable> clusterInput = new ArrayList<>();
+        for (DMatch goodMatch : goodMatchesList) {
+            clusterInput.add(new KeyPointClusterable(goodMatch, wholeKeyPointsList.get(goodMatch.trainIdx)));
+        }
+
+        double eps = min(elementScreenshot.getWidth(), elementScreenshot.getHeight()) * 0.5;
+        DBSCANClusterer<KeyPointClusterable> dbscan = new DBSCANClusterer<>(eps, MINIMUM_CLUSTER_POPULATION);
+        List<Cluster<KeyPointClusterable>> clusters = dbscan.cluster(clusterInput);
+
+        // Step 6: Process each cluster to find a bounding box via homography
+        List<MatchResultWithRectangle> foundMatches = new ArrayList<>();
+        List<KeyPoint> elementKeyPointsList = keypointsElement.toList();
+
+        for (Cluster<KeyPointClusterable> cluster : clusters) {
+            List<Point> elementPoints = new ArrayList<>();
+            List<Point> wholePoints = new ArrayList<>();
+
+            for (KeyPointClusterable kpc : cluster.getPoints()) {
+                elementPoints.add(elementKeyPointsList.get(kpc.getMatch().queryIdx).pt);
+                wholePoints.add(kpc.getKeyPoint().pt);
+            }
+
+            // Need at least 4 points to calculate homography
+            if (elementPoints.size() < MINIMUM_POINTS_FOR_HOMOGRAPHY) {
+                continue;
+            }
+
+           /* // Get the most upper-left point from wholePoints to use as a reference for the cluster's location
+            Point topLeftCorner = wholePoints.stream()
+                    .min(Comparator.<Point>comparingDouble(p -> p.x).thenComparingDouble(p -> p.y))
+                    .orElse(new Point(0, 0));
+
+            var rectangle = new Rectangle((int) topLeftCorner.x, (int) topLeftCorner.y, elementScreenshot.getWidth(),
+                    elementScreenshot.getHeight());
+            foundMatches.add(new MatchResultWithRectangle(rectangle, cluster.getPoints().size()));*/
+
+            // Find the perspective transformation between the element and the cluster in the whole image
+            MatOfPoint2f elementPtsMat = new MatOfPoint2f(elementPoints.toArray(new Point[0]));
+            MatOfPoint2f wholePtsMat = new MatOfPoint2f(wholePoints.toArray(new Point[0]));
+            Mat mask = new Mat();
+            Mat homography = findHomography(elementPtsMat, wholePtsMat, Calib3d.RANSAC, 5.0, mask);
+            if (homography.empty() || homography.rows() != 3 || homography.cols() != 3) {
+                continue;
+            }
+
+            // Use the homography to project the corners of the element onto the whole screenshot
+            Mat elementCorners = new Mat(4, 1, CvType.CV_32FC2);
+            elementCorners.put(0, 0, 0, 0);
+            elementCorners.put(1, 0, elementMat.cols(), 0);
+            elementCorners.put(2, 0, elementMat.cols(), elementMat.rows());
+            elementCorners.put(3, 0, 0, elementMat.rows());
+            Mat sceneCorners = new Mat();
+            perspectiveTransform(elementCorners, sceneCorners, homography);
+
+            // Create a bounding rectangle from the transformed corners
+            Rect boundingRect = Imgproc.boundingRect(new MatOfPoint(
+                    new Point(sceneCorners.get(0, 0)),
+                    new Point(sceneCorners.get(1, 0)),
+                    new Point(sceneCorners.get(2, 0)),
+                    new Point(sceneCorners.get(3, 0))
+            ));
+
+            // The score is the number of inliers from the RANSAC homography calculation, which is a robust measure of match quality.
+            double score = countNonZero(mask);
+            foundMatches.add(new MatchResultWithRectangle(
+                    new Rectangle(boundingRect.x, boundingRect.y, boundingRect.width, boundingRect.height),
+                    score
+            ));
+        }
+
+        // Step 7: Sort the found matches by score in descending order and return the rectangles
+        return foundMatches.stream()
+                .sorted(comparingDouble(MatchResultWithRectangle::score).reversed())
+                .limit(TOP_VISUAL_MATCHES_TO_FIND)
+                .map(MatchResultWithRectangle::rectangle)
+                .collect(toList());
+    }
+
     /**
      * A private record to hold intermediate match results including the rectangle and score.
      */
     private record MatchResultWithRectangle(Rectangle rectangle, double score) {
     }
 
-
-    public static List<Rectangle> findMatchingRegionsWithORB(BufferedImage wholeScreenshot, BufferedImage elementScreenshot) {
-        if (!initialized) {
-            initialized = initializeOpenCv();
-        }
-
-        // --- Phase 0: Setup and Image Preparation ---
-        // Convert BufferedImages to OpenCV Mat format
-        Mat sceneMat = imdecode(new MatOfByte(imageToByteArray(wholeScreenshot, "png")), Imgcodecs.IMREAD_COLOR);
-        Mat templateMat = imdecode(new MatOfByte(imageToByteArray(elementScreenshot, "png")), Imgcodecs.IMREAD_COLOR);
-
-        // Convert images to grayscale for feature detection
-        Mat sceneGray = new Mat();
-        Mat templateGray = new Mat();
-        Imgproc.cvtColor(sceneMat, sceneGray, Imgproc.COLOR_BGR2GRAY);
-        Imgproc.cvtColor(templateMat, templateGray, Imgproc.COLOR_BGR2GRAY);
-        sceneMat.release();
-        templateMat.release();
-
-        // --- Phase 1: Feature Detection and Matching ---
-
-        // Configure and create an ORB detector with parameters tuned for UI detection
-        ORB orb = ORB.create(5000, 1.1f, 6, 31, 0, 2, ORB.HARRIS_SCORE, 31, 20);
-
-        // Detect keypoints and compute descriptors for both template and scene
-        MatOfKeyPoint templateKeyPoints = new MatOfKeyPoint();
-        MatOfKeyPoint sceneKeyPoints = new MatOfKeyPoint();
-        Mat templateDescriptors = new Mat();
-        Mat sceneDescriptors = new Mat();
-        orb.detectAndCompute(templateGray, new Mat(), templateKeyPoints, templateDescriptors);
-        orb.detectAndCompute(sceneGray, new Mat(), sceneKeyPoints, sceneDescriptors);
-        sceneGray.release();
-        templateGray.release();
-
-        // Check if enough features were found in the template
-        if (templateKeyPoints.empty() || templateDescriptors.empty()) {
-            LOG.warn("No ORB features found in the template image. Cannot perform matching.");
-            templateKeyPoints.release();
-            sceneKeyPoints.release();
-            templateDescriptors.release();
-            sceneDescriptors.release();
-            return Collections.emptyList();
-        }
-        LOG.info("Got {} template keypoints and {} descriptors:", templateKeyPoints.toList().size(), templateDescriptors.rows());
-
-        // Use Brute-Force Matcher with Hamming distance, appropriate for ORB
-        DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
-        MatOfDMatch matches = new MatOfDMatch();
-        matcher.match(templateDescriptors, sceneDescriptors, matches);
-
-        // Initial filtering of matches based on distance
-        List<DMatch> matchesList = matches.toList();
-        matches.release();
-        if (matchesList.isEmpty()) {
-            LOG.info("No initial matches found between template and scene.");
-            templateKeyPoints.release();
-            sceneKeyPoints.release();
-            templateDescriptors.release();
-            sceneDescriptors.release();
-            return Collections.emptyList();
-        }
-        LOG.info("Got {} matches", matchesList.size());
-        double minDst = matchesList.stream().mapToDouble(m -> m.distance).min().orElse(Double.MAX_VALUE);
-        List<DMatch> goodMatches = new ArrayList<>();
-        for (DMatch match : matchesList) {
-            if (match.distance <= Math.max(minDst * 3.0, 30.0)) { // Use a multiplier or a minimum threshold
-                goodMatches.add(match);
-            }
-        }
-
-        LOG.info("Got {} GOOD matches", goodMatches.size());
-        if (goodMatches.size() < 6) { // Need at least 6 points for robust clustering/homography
-            LOG.info("Not enough good matches ({}) found after initial filtering.", goodMatches.size());
-            return Collections.emptyList();
-        }
-
-        // --- Phase 2: Spatial Clustering with DBSCAN ---
-
-        // Prepare data for clustering by wrapping keypoints in a Clusterable interface
-        List<KeyPoint> sceneKeyPointsList = sceneKeyPoints.toList();
-        List<KeyPointClusterable> clusterInput = new ArrayList<>();
-        for (DMatch match : goodMatches) {
-            clusterInput.add(new KeyPointClusterable(match, sceneKeyPointsList.get(match.trainIdx)));
-        }
-        LOG.info("Got {} clusters", clusterInput.size());
-
-        // Configure DBSCAN clusterer
-        // eps: search radius, proportional to the template's size
-        // minPts: minimum points to form a cluster, must be >= 4 for homography
-        int templateDiagonal = (int) Math.hypot(elementScreenshot.getWidth(), elementScreenshot.getHeight());
-        int eps = (int) (templateDiagonal * 0.3); // 30% of the diagonal as search radius
-        int minPts = 4; // A safe number of points, more than the 4 required for homography
-
-        DBSCANClusterer<KeyPointClusterable> dbscan = new DBSCANClusterer<>(eps, minPts);
-        List<Cluster<KeyPointClusterable>> clusters = dbscan.cluster(clusterInput);
-
-        if (clusters.isEmpty()) {
-            LOG.info("DBSCAN did not find any dense clusters of keypoints.");
-            return Collections.emptyList();
-        }
-
-        // --- Phase 3: Verification via Homography and Bounding Box Calculation ---
-
-        List<Match> foundMatches = new ArrayList<>();
-        List<KeyPoint> templateKeyPointsList = templateKeyPoints.toList();
-
-        try {
-            for (Cluster<KeyPointClusterable> cluster : clusters) {
-                List<KeyPointClusterable> clusterPoints = cluster.getPoints();
-
-                if (clusterPoints.size() < minPts) {
-                    continue; // Skip clusters that are too small
-                }
-
-                // Extract source (template) and destination (scene) points for this cluster
-                List<Point> srcPointsList = new ArrayList<>();
-                List<Point> dstPointsList = new ArrayList<>();
-                for (KeyPointClusterable kpClusterable : clusterPoints) {
-                    srcPointsList.add(templateKeyPointsList.get(kpClusterable.getMatch().queryIdx).pt);
-                    dstPointsList.add(kpClusterable.getKeyPoint().pt);
-                }
-
-                MatOfPoint2f srcPoints = new MatOfPoint2f();
-                srcPoints.fromList(srcPointsList);
-                MatOfPoint2f dstPoints = new MatOfPoint2f();
-                dstPoints.fromList(dstPointsList);
-
-                // Calculate homography using RANSAC to find the perspective transform
-                Mat mask = new Mat();
-                Mat homography = Calib3d.findHomography(srcPoints, dstPoints, Calib3d.RANSAC, 5.0, mask);
-                srcPoints.release();
-                dstPoints.release();
-
-                if (homography.empty()) {
-                    continue; // Could not compute a valid homography for this cluster
-                }
-
-                // Calculate the match score based on the inlier ratio from RANSAC
-                int inliers = Core.countNonZero(mask);
-                double score = (double) inliers / clusterPoints.size();
-
-                // Define a threshold for a valid match score
-                final double MIN_INLIER_RATIO = 0.75;
-                if (score < MIN_INLIER_RATIO) {
-                    continue;
-                }
-
-                // Transform the corners of the template to find the bounding box in the scene
-                Mat templateCorners = new Mat(4, 1, CvType.CV_32FC2);
-                Mat sceneCorners = new Mat();
-                templateCorners.put(0, 0, 0, 0);
-                templateCorners.put(1, 0, templateMat.cols(), 0);
-                templateCorners.put(2, 0, templateMat.cols(), templateMat.rows());
-                templateCorners.put(3, 0, 0, templateMat.rows());
-
-                Core.perspectiveTransform(templateCorners, sceneCorners, homography);
-
-                // Get the axis-aligned bounding box of the transformed corners
-                double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
-                double maxX = Double.MIN_VALUE, maxY = Double.MIN_VALUE;
-                for (int i = 0; i < sceneCorners.rows(); i++) {
-                    double[] point = sceneCorners.get(i, 0);
-                    double x = point[0];
-                    double y = point[1];
-                    minX = Math.min(minX, x);
-                    minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x);
-                    maxY = Math.max(maxY, y);
-                }
-
-                // Ensure coordinates are within the bounds of the screenshot
-                minX = Math.max(0, minX);
-                minY = Math.max(0, minY);
-                maxX = Math.min(wholeScreenshot.getWidth(), maxX);
-                maxY = Math.min(wholeScreenshot.getHeight(), maxY);
-
-                Rectangle region = new Rectangle((int) minX, (int) minY, (int) (maxX - minX), (int) (maxY - minY));
-                foundMatches.add(new Match(region, score));
-                templateCorners.release();
-                sceneCorners.release();
-                mask.release();
-                homography.release();
-            }
-        } catch (Exception e) {
-            LOG.error("Got issue:", e);
-        }
-
-        // --- Finalization: Sort and Return Results ---
-
-        // Sort the found matches by their score in descending order
-        return foundMatches.stream()
-                .sorted(comparingDouble(Match::score).reversed())
-                .map(Match::region)
-                .collect(toList());
-    }
-
-
     private record MatchResult(java.awt.Point point, double score) {
-    }
-
-    private record Match(Rectangle region, double score) {
     }
 
     private static class KeyPointClusterable implements Clusterable {

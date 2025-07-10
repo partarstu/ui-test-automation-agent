@@ -78,7 +78,7 @@ public class ChromaRetriever implements UiElementRetriever {
                 .map(match -> new RetrievedItem(UiElement.fromTextSegment(match.embedded()), match.score()))
                 .distinct()
                 .toList();
-        LOG.info("Retrieved {} elements corresponding to the query '{}'", resultingItems.size(), query);
+        LOG.info("Retrieved {} most matching results to the query '{}'", resultingItems.size(), query);
         return resultingItems;
     }
 

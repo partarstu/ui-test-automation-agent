@@ -19,6 +19,7 @@ import dev.langchain4j.model.azure.AzureOpenAiChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.googleai.GeminiThinkingConfig;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.vertexai.gemini.VertexAiGeminiChatModel;
 import org.tarik.ta.AgentConfig;
 
@@ -35,7 +36,7 @@ public class ModelFactory {
     private static final int MAX_OUTPUT_TOKENS = getMaxOutputTokens();
     private static final double TEMPERATURE = getTemperature();
     private static final double TOP_P = getTopP();
-    private static final ModelProvider MODEL_PROVIDER = AgentConfig.getModelProvider();
+    private static final ModelProvider MODEL_PROVIDER = getModelProvider();
     private static final boolean LOG_MODEL_OUTPUTS = isModelLoggingEnabled();
     private static final boolean OUTPUT_THOUGHTS = isThinkingOutputEnabled();
     private static final int GEMINI_THINKING_BUDGET = getGeminiThinkingBudget();
@@ -44,6 +45,7 @@ public class ModelFactory {
         return switch (MODEL_PROVIDER) {
             case GOOGLE -> new GenAiModel(getGeminiModel(INSTRUCTION_MODEL_NAME, outputJson, LOG_MODEL_OUTPUTS, OUTPUT_THOUGHTS));
             case OPENAI -> new GenAiModel(getOpenAiModel(INSTRUCTION_MODEL_NAME));
+            case GROQ -> new GenAiModel(getGroqModel(INSTRUCTION_MODEL_NAME));
         };
     }
 
@@ -51,11 +53,12 @@ public class ModelFactory {
         return switch (MODEL_PROVIDER) {
             case GOOGLE -> new GenAiModel(getGeminiModel(VISION_MODEL_NAME, outputJson, LOG_MODEL_OUTPUTS, OUTPUT_THOUGHTS));
             case OPENAI -> new GenAiModel(getOpenAiModel(VISION_MODEL_NAME));
+            case GROQ -> new GenAiModel(getGroqModel(VISION_MODEL_NAME));
         };
     }
 
     private static ChatModel getGeminiModel(String modelName, boolean outputJson, boolean logResponses, boolean outputThoughts) {
-        var provider = AgentConfig.getGoogleApiProvider();
+        var provider = getGoogleApiProvider();
         return switch (provider) {
             case STUDIO_AI -> GoogleAiGeminiChatModel.builder()
                     .apiKey(getGoogleApiToken())
@@ -90,10 +93,24 @@ public class ModelFactory {
     private static ChatModel getOpenAiModel(String modelName) {
         return AzureOpenAiChatModel.builder()
                 .maxRetries(MAX_RETRIES)
-                .apiKey(AgentConfig.getOpenAiApiKey())
+                .apiKey(getOpenAiApiKey())
                 .deploymentName(modelName)
                 .maxTokens(MAX_OUTPUT_TOKENS)
                 .endpoint(getOpenAiEndpoint())
+                .temperature(TEMPERATURE)
+                .topP(TOP_P)
+                .listeners(singletonList(new ChatModelEventListener()))
+                .build();
+    }
+
+    private static ChatModel getGroqModel(String modelName) {
+        return OpenAiChatModel.builder()
+                .baseUrl(getGroqEndpoint())
+                .apiKey("gsk_...")
+                .modelName(modelName)
+                .maxRetries(MAX_RETRIES)
+                .apiKey(getGroqApiKey())
+                .maxTokens(MAX_OUTPUT_TOKENS)
                 .temperature(TEMPERATURE)
                 .topP(TOP_P)
                 .listeners(singletonList(new ChatModelEventListener()))

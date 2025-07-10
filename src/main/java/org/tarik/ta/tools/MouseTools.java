@@ -18,6 +18,8 @@ package org.tarik.ta.tools;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.tarik.ta.exceptions.UserChoseTerminationException;
 import org.tarik.ta.exceptions.UserInterruptedExecutionException;
 
@@ -30,6 +32,7 @@ import static org.tarik.ta.tools.ElementLocator.locateElementOnTheScreen;
 import static org.tarik.ta.utils.CommonUtils.*;
 
 public class MouseTools extends AbstractTools {
+    private static final Logger LOG = LoggerFactory.getLogger(MouseTools.class);
     private static final int MOUSE_ACTION_DELAY_MILLIS = 500;
 
     @Tool(value = "Performs a right click with a mouse at the specified UI element." +
@@ -40,8 +43,7 @@ public class MouseTools extends AbstractTools {
     public static ToolExecutionResult rightMouseClick(@P(value = "Detailed description of the UI element to right-click on")
                                                       String elementDescription) {
         if (elementDescription == null || elementDescription.isBlank()) {
-            return new ToolExecutionResult(ERROR,
-                    "%s: Can't click an element without any description using mouse".formatted(MouseTools.class.getSimpleName()), true);
+            return getFailedToolExecutionResult("Can't click with right mouse button on an element without any description", true);
         }
 
         return executeUsingUiElement(elementDescription, elementLocation -> {
@@ -63,8 +65,7 @@ public class MouseTools extends AbstractTools {
     public static ToolExecutionResult leftMouseClick(@P(value = "Detailed description of the UI element to left-click on")
                                                      String elementDescription) {
         if (elementDescription == null || elementDescription.isBlank()) {
-            return new ToolExecutionResult(ERROR, "%s: Can't click an element without any description using mouse"
-                    .formatted(MouseTools.class.getSimpleName()), true);
+            return getFailedToolExecutionResult("Can't click an element without any description using mouse", true);
         }
 
         return executeUsingUiElement(elementDescription, elementLocation -> {
@@ -86,8 +87,7 @@ public class MouseTools extends AbstractTools {
     public static ToolExecutionResult leftMouseDoubleClick(@P(value = "Detailed description of the UI element to double-click on")
                                                            String elementDescription) {
         if (elementDescription == null || elementDescription.isBlank()) {
-            return new ToolExecutionResult(ERROR, "%s: Can't double-click an element without any description using mouse"
-                    .formatted(MouseTools.class.getSimpleName()), true);
+            return getFailedToolExecutionResult("Can't double-click an element without any description using mouse", true);
         }
 
         return executeUsingUiElement(elementDescription, elementLocation -> {
@@ -112,8 +112,7 @@ public class MouseTools extends AbstractTools {
     public static ToolExecutionResult moveMouseToElementCenter(@P(value = "Detailed description of the UI element to move the mouse to")
                                                                String elementDescription) {
         if (elementDescription == null || elementDescription.isBlank()) {
-            return new ToolExecutionResult(ERROR, "%s: Can't move mouse to an element without any description"
-                    .formatted(MouseTools.class.getSimpleName()), true);
+            return getFailedToolExecutionResult("Can't move mouse to an element without any description", true);
         }
 
         return executeUsingUiElement(elementDescription, elementLocation -> {
@@ -159,15 +158,16 @@ public class MouseTools extends AbstractTools {
             return point.map(executionResultProvider)
                     .orElseGet(() -> getNoElementFoundResult(elementDescription));
         } catch (UserChoseTerminationException | UserInterruptedExecutionException e) {
+            LOG.error(e.getMessage());
             return new ToolExecutionResult(INTERRUPTED_BY_USER, e.getMessage(), false);
         } catch (Exception e) {
-            return new ToolExecutionResult(ERROR, e.getMessage(), true);
+            return getFailedToolExecutionResult(e.getMessage(), true);
         }
     }
 
     @NotNull
     private static ToolExecutionResult getNoElementFoundResult(String elementDescription) {
-        return new ToolExecutionResult(ERROR, "The element with description '%s' was not found on the screen".formatted(elementDescription),
+        return getFailedToolExecutionResult("The element with description '%s' was not found on the screen".formatted(elementDescription),
                 true);
     }
 }
