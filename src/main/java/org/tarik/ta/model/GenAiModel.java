@@ -46,13 +46,23 @@ public class GenAiModel implements AutoCloseable {
         this.chatLanguageModel = chatLanguageModel;
     }
 
-    public <T> T generateAndGetResponseAsObject(StructuredResponsePrompt<T> prompt, String generationDescription) {
+    public <T> T generateAndGetResponseAsObject(@NotNull StructuredResponsePrompt<T> prompt, @NotNull String generationDescription) {
         Class<T> objectClass = prompt.getResponseObjectClass();
         var response = generate(prompt.getSystemMessage(), prompt.getUserMessage(), generationDescription);
         return parseModelResponseAsObject(response, objectClass);
     }
 
-    public ChatResponse generate(AbstractPrompt prompt, List<ToolSpecification> toolSpecifications, String generationDescription) {
+    public <T> T generateAndGetResponseAsObject(@NotNull StructuredResponsePrompt<T> prompt,
+                                                @NotNull List<ToolSpecification> toolSpecifications,
+                                                @NotNull String generationDescription) {
+        Class<T> objectClass = prompt.getResponseObjectClass();
+        var response = generate(prompt.getSystemMessage(), prompt.getUserMessage(), toolSpecifications, generationDescription);
+        return parseModelResponseAsObject(response, objectClass);
+    }
+
+    public ChatResponse generate(@NotNull AbstractPrompt prompt,
+                                 @NotNull List<ToolSpecification> toolSpecifications,
+                                 @NotNull String generationDescription) {
         return generate(prompt.getSystemMessage(), prompt.getUserMessage(), toolSpecifications, generationDescription);
     }
 

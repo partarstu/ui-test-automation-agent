@@ -17,6 +17,7 @@ package org.tarik.ta.rag.model;
 
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.segment.TextSegment;
+import org.jetbrains.annotations.NotNull;
 
 import java.awt.image.BufferedImage;
 import java.util.*;
@@ -27,6 +28,7 @@ import static org.tarik.ta.utils.ImageUtils.convertBase64ToImage;
 import static org.tarik.ta.utils.ImageUtils.convertImageToBase64;
 import static org.tarik.ta.rag.model.UiElement.MetadataField.*;
 
+// TODO: Modify this entity to let multiple screenshots per UI element be stored, user dialogs will have to be extended as well
 public record UiElement(UUID uuid,
                         String name,
                         String ownDescription,
@@ -92,6 +94,7 @@ public record UiElement(UUID uuid,
         }
     }
 
+    @NotNull
     @Override
     public String toString() {
         return new StringJoiner(", ", UiElement.class.getSimpleName() + "[", "]")

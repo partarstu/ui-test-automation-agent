@@ -18,7 +18,7 @@ package org.tarik.ta.prompts;
 
 import dev.langchain4j.data.message.Content;
 import org.jetbrains.annotations.NotNull;
-import org.tarik.ta.dto.BoundingBox;
+import org.tarik.ta.dto.BoundingBoxes;
 
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -27,7 +27,7 @@ import java.util.Map;
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 
-public class ElementBoundingBoxPrompt extends StructuredResponsePrompt<BoundingBox> {
+public class ElementBoundingBoxPrompt extends StructuredResponsePrompt<BoundingBoxes> {
     private static final String SYSTEM_PROMPT_FILE_NAME = "element_bounding_box_prompt.txt";
     private static final String ELEMENT_DESCRIPTION_PLACEHOLDER = "target_element_description";
     private final BufferedImage screenshot;
@@ -45,8 +45,8 @@ public class ElementBoundingBoxPrompt extends StructuredResponsePrompt<BoundingB
 
     @NotNull
     @Override
-    public Class<BoundingBox> getResponseObjectClass() {
-        return BoundingBox.class;
+    public Class<BoundingBoxes> getResponseObjectClass() {
+        return BoundingBoxes.class;
     }
 
     @Override

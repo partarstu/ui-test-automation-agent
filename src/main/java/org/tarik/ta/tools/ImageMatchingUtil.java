@@ -82,7 +82,7 @@ public class ImageMatchingUtil {
         return true;
     }
 
-    public static List<Rectangle> findMatchingRegions(BufferedImage wholeScreenshot, BufferedImage elementScreenshot) {
+    public static List<Rectangle> findMatchingRegionsWithTemplateMatching(BufferedImage wholeScreenshot, BufferedImage elementScreenshot) {
         if (!initialized) {
             initialized = initializeOpenCv();
         }

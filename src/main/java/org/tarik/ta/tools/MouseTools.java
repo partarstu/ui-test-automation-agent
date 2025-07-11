@@ -40,8 +40,8 @@ public class MouseTools extends AbstractTools {
             "Provide a detailed description of the element, including its name, type, and any " +
             "relevant context that helps to identify it uniquely."
     )
-    public static ToolExecutionResult rightMouseClick(@P(value = "Detailed description of the UI element to right-click on")
-                                                      String elementDescription) {
+    public static ToolExecutionResult rightMouseClick(
+            @P(value = "Detailed description of the UI element to right-click on") String elementDescription) {
         if (elementDescription == null || elementDescription.isBlank()) {
             return getFailedToolExecutionResult("Can't click with right mouse button on an element without any description", true);
         }
@@ -62,8 +62,8 @@ public class MouseTools extends AbstractTools {
             "Provide a detailed description of the element, including its name, type, and any " +
             "relevant context that helps to identify it uniquely."
     )
-    public static ToolExecutionResult leftMouseClick(@P(value = "Detailed description of the UI element to left-click on")
-                                                     String elementDescription) {
+    public static ToolExecutionResult leftMouseClick(
+            @P(value = "Detailed description of the UI element to left-click on") String elementDescription) {
         if (elementDescription == null || elementDescription.isBlank()) {
             return getFailedToolExecutionResult("Can't click an element without any description using mouse", true);
         }
@@ -84,8 +84,8 @@ public class MouseTools extends AbstractTools {
             "Provide a detailed description of the element, including its name, type, and any " +
             "relevant context that helps to identify it uniquely."
     )
-    public static ToolExecutionResult leftMouseDoubleClick(@P(value = "Detailed description of the UI element to double-click on")
-                                                           String elementDescription) {
+    public static ToolExecutionResult leftMouseDoubleClick(
+            @P(value = "Detailed description of the UI element to double-click on") String elementDescription) {
         if (elementDescription == null || elementDescription.isBlank()) {
             return getFailedToolExecutionResult("Can't double-click an element without any description using mouse", true);
         }
@@ -109,8 +109,8 @@ public class MouseTools extends AbstractTools {
             "Provide a detailed description of the element, including its name, type, and any " +
             "relevant context that helps to identify it uniquely."
     )
-    public static ToolExecutionResult moveMouseToElementCenter(@P(value = "Detailed description of the UI element to move the mouse to")
-                                                               String elementDescription) {
+    public static ToolExecutionResult moveMouseToElementCenter(
+            @P(value = "Detailed description of the UI element to move the mouse to") String elementDescription) {
         if (elementDescription == null || elementDescription.isBlank()) {
             return getFailedToolExecutionResult("Can't move mouse to an element without any description", true);
         }

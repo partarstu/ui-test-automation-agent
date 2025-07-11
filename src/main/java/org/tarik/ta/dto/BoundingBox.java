@@ -21,7 +21,7 @@ import org.tarik.ta.annotations.JsonFieldDescription;
 
 import java.awt.*;
 
-@JsonClassDescription("Represents a bounding box with coordinates.")
+@JsonClassDescription("a single bounding box with coordinates.")
 public record BoundingBox(
  @JsonFieldDescription("The x-coordinate of the top-left corner of the bounding box.") int x1,
  @JsonFieldDescription("The y-coordinate of the top-left corner of the bounding box.") int y1,

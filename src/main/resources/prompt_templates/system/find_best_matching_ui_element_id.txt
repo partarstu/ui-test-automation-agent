@@ -6,6 +6,7 @@ Important Considerations:
  - Each UI element candidate is marked with one bounding box on the provided to you screenshot.
  - Each UI element candidate which has the provided to you info that doesn't match well to the description of the target UI element, is automatically not a good match.
  - The color of each bounding box on the provided to you screenshot is unique.
+ - Never treat the bounding box around any element candidate as a visual feature of this element (e.g. its frame, edge etc.) - the bounding boxes are only used to let you know the location of each element candidate on the screenshot.
  - Use the information about the color of the bounding box and about the ID of each UI element candidate in order to visually identify this element on the provided to you screenshot and determine its detailed visual characteristics.
  - Use the determined by you visual characteristics of each UI element candidate and all provided to you information (including info about the surrounding UI elements) in order to determine if this element candidate is a good match for the target UI element, eliminating any ambiguity.
  - There could be UI element candidates with the same description, but different bounding boxes.
