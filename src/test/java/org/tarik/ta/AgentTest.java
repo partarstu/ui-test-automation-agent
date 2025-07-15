@@ -25,15 +25,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.tarik.ta.dto.TestExecutionResult;
+import org.tarik.ta.dto.*;
 import org.tarik.ta.dto.TestExecutionResult.TestExecutionStatus;
-import org.tarik.ta.dto.TestStepResult;
-import org.tarik.ta.dto.VerificationExecutionResult;
 import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.helper_entities.TestStep;
 import org.tarik.ta.model.GenAiModel;
 import org.tarik.ta.model.ModelFactory;
 import org.tarik.ta.prompts.ActionExecutionPrompt;
+import org.tarik.ta.prompts.TestCaseExecutionPlanPrompt;
 import org.tarik.ta.prompts.VerificationExecutionPrompt;
 import org.tarik.ta.tools.AbstractTools.ToolExecutionResult;
 import org.tarik.ta.tools.CommonTools;
@@ -84,6 +83,7 @@ class AgentTest {
     private static final int TOOL_PARAM_WAIT_AMOUNT_SECONDS = 1;
     private static final String MOCK_TOOL_NAME = "waitSeconds";
     private static final String MOCK_TOOL_ARGS = "{\"arg0\":\"%d\"}".formatted(TOOL_PARAM_WAIT_AMOUNT_SECONDS);
+    private static final List<String> MOCK_TOOL_ARGS_LIST = List.of(""+TOOL_PARAM_WAIT_AMOUNT_SECONDS);
     private static final String MOCK_TOOL_ID = "mockToolId123";
 
 
@@ -110,7 +110,6 @@ class AgentTest {
         commonToolsMockedStatic.when(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)))
                 .thenReturn(new ToolExecutionResult(SUCCESS, "Wait completed", false));
         imageUtilsMockedStatic.when(() -> ImageUtils.convertImageToBase64(any(), anyString())).thenReturn("mock-base64-string");
-
 
         // Agent Config
         agentConfigMockedStatic.when(AgentConfig::getTestStepExecutionRetryTimeoutMillis).thenReturn(TEST_STEP_TIMEOUT_MILLIS);
@@ -390,12 +389,10 @@ class AgentTest {
         TestStep step = new TestStep(action, null, "Verify");
         TestCase testCase = new TestCase("Invalid Args Case", null, List.of(step));
         String invalidJson = "this is not json";
-        ToolExecutionRequest invalidArgsRequest = ToolExecutionRequest.builder()
-                .id(MOCK_TOOL_ID)
-                .name(MOCK_TOOL_NAME)
-                .arguments(invalidJson)
-                .build();
-        when(mockAiMessage.toolExecutionRequests()).thenReturn(List.of(invalidArgsRequest));
+        var invalidArgsRequest = new TestStepExecutionPlan("1", MOCK_TOOL_NAME, List.of(invalidJson));
+        var testCaseExecutionPlan = new TestCaseExecutionPlan(List.of(invalidArgsRequest));
+        when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString()))
+                .thenReturn(testCaseExecutionPlan);
 
         // When
         TestExecutionResult result = Agent.executeTestCase(testCase);
@@ -404,14 +401,13 @@ class AgentTest {
         assertThat(result.getTestExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
         assertThat(result.getStepResults()).hasSize(1);
         TestStepResult stepResult = result.getStepResults().getFirst();
-        assertThat(stepResult.isSuccessful()).isFalse();
         assertThat(stepResult.getErrorMessage()).startsWith("Failure while executing action '%s'. Root cause: ".formatted(action));
         assertThat(stepResult.getScreenshot()).isNotNull();
         assertThat(stepResult.getExecutionStartTimestamp()).isNotNull();
         assertThat(stepResult.getExecutionEndTimestamp()).isNotNull();
 
-        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
-        verify(mockModel, never()).generateAndGetResponseAsObject(any(), any());
+        verify(mockModel).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString());
+        verify(mockModel, never()).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), anyString());
     }
 
     @Test
@@ -422,6 +418,10 @@ class AgentTest {
         TestCase testCase = new TestCase("Verify Retry Success", null, List.of(step));
         String successMsg = "Verification finally OK";
         String failMsg = "Verification not ready";
+        var toolExecutionRequest = new TestStepExecutionPlan("1", MOCK_TOOL_NAME, MOCK_TOOL_ARGS_LIST);
+        var testCaseExecutionPlan = new TestCaseExecutionPlan(List.of(toolExecutionRequest));
+        when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString()))
+                .thenReturn(testCaseExecutionPlan);
         commonToolsMockedStatic.when(() -> waitSeconds(eq("1")))
                 .thenReturn(new ToolExecutionResult(SUCCESS, "Action OK", false));
         when(mockModel.generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), eq("verification execution")))

@@ -8,7 +8,7 @@ import java.util.List;
 
 @JsonClassDescription("the list of identified by you tool requests")
 public record TestCaseExecutionPlan(
-        @JsonFieldDescription("contains all identified by test step execution plans")
+        @JsonFieldDescription("contains all identified by test step execution plans.")
         List<TestStepExecutionPlan> testStepExecutionPlans
 ) {
 }

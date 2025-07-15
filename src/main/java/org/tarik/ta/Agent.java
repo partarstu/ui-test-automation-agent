@@ -61,6 +61,7 @@ import static org.tarik.ta.model.ModelFactory.getInstructionModel;
 import static org.tarik.ta.model.ModelFactory.getVisionModel;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.utils.CommonUtils.*;
+import static org.tarik.ta.utils.ImageUtils.saveScreenshot;
 
 public class Agent {
     private static final Logger LOG = LoggerFactory.getLogger(Agent.class);
@@ -70,6 +71,7 @@ public class Agent {
     protected static final int VERIFICATION_RETRY_TIMEOUT_MILLIS = getVerificationRetryTimeoutMillis();
     protected static final int TEST_STEP_RETRY_INTERVAL_MILLIS = getTestStepExecutionRetryIntervalMillis();
     protected static final int ACTION_VERIFICATION_DELAY_MILLIS = getActionVerificationDelayMillis();
+    private static final boolean DEBUG_MODE = AgentConfig.isDebugMode();
     private static final int ERROR_STATUS = 1;
     private static final String VERIFICATION_EXECUTION = "verification execution";
     private static final String PRECONDITION_VALIDATION = "precondition validation";
@@ -96,7 +98,8 @@ public class Agent {
         });
     }
 
-    private record TestStepById(String id, TestStep testStep){}
+    private record TestStepById(String id, TestStep testStep) {
+    }
 
     public static TestExecutionResult executeTestCase(TestCase testCase) {
         var testExecutionStartTimestamp = now();
@@ -145,17 +148,15 @@ public class Agent {
                 String actualResult = null;
                 if (isNotBlank(verificationInstruction)) {
                     sleepMillis(ACTION_VERIFICATION_DELAY_MILLIS);
-                    var finalInstruction = "Verify that %s".formatted(verificationInstruction);
+                    var finalInstruction = "Verify that:  \"%s\"".formatted(verificationInstruction);
                     LOG.info("Executing verification: '{}'", finalInstruction);
                     var verificationResult = processVerificationRequest(finalInstruction, actionInstruction);
                     if (!verificationResult.success()) {
-                        var errorMessage = "Verifying that '%s' failed. %s"
-                                .formatted(verificationInstruction, verificationResult.message());
+                        var errorMessage = "Verification failed. %s"               .formatted(verificationResult.message());
                         addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, verificationResult.message(),
                                 executionStartTimestamp, now());
                         return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp,
-                                now(),
-                                errorMessage);
+                                now(), errorMessage);
                     }
                     LOG.info("Verification execution complete.");
                     actualResult = verificationResult.message();
@@ -243,12 +244,15 @@ public class Agent {
     private static VerificationExecutionResult processVerificationRequest(@NotNull String verification,
                                                                           @NotNull String actionIncludingData) {
         return executeWithRetries(VERIFICATION_RETRY_TIMEOUT_MILLIS, VERIFICATION_EXECUTION, (model) -> {
+            var screenshot = captureScreen();
+            if(DEBUG_MODE){
+                saveScreenshot(screenshot, "verification");
+            }
             var prompt = VerificationExecutionPrompt.builder()
                     .withVerificationDescription(verification)
                     .withActionDescription(actionIncludingData)
-                    .screenshot(captureScreen())
+                    .screenshot(screenshot)
                     .build();
-            LOG.info("'{}'", verification);
             return model.generateAndGetResponseAsObject(prompt, VERIFICATION_EXECUTION);
         }, VerificationExecutionResult::success, Agent::getVerificationExecutionModel);
     }
@@ -267,7 +271,7 @@ public class Agent {
                 } else {
                     retryActive = now().isBefore(deadline);
                     if (retryActive) {
-                        waitTillNextRetry(operationDescription + " failed", deadline);
+                        waitTillNextRetry("The %s failed".formatted(operationDescription), deadline);
                     }
                 }
             } while (retryActive);
@@ -296,16 +300,6 @@ public class Agent {
 
     private static Instant getNextRetryMoment() {
         return now().plusMillis(TEST_STEP_RETRY_INTERVAL_MILLIS);
-    }
-
-    private static ToolExecutionResult executeRequestedTool(String toolName, String args) {
-        LOG.info("Model requested an execution of the tool '{}' with the following arguments map: <{}>", toolName, args);
-        var tool = getTool(toolName);
-        Class<?> toolClass = tool.clazz();
-        int paramsAmount = tool.toolSpecification().parameters().properties().size();
-        var method = getToolClassMethod(toolClass, toolName, paramsAmount);
-        var arguments = parseArgumentsJson(args, method);
-        return getToolExecutionResult(toolName, arguments, method, toolClass);
     }
 
     private static ToolExecutionResult executeRequestedTool(String toolName, List<String> args) {

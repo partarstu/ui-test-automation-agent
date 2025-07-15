@@ -51,15 +51,27 @@ dialog.default.font.size=13
 
 #-----------------------------------------------
 # Element Configuration
+
 element.bounding.box.color=green
+
 # this score is the minimum score which needs to be reached during target UI element retrieval based on its name
 element.retrieval.min.target.score=0.85
+
 # this score is the minimum score which needs to be reached during retrieval of all UI elements which are at least partially similar to
 # the target element name - they could be later modified by user in order to enhance the retrieval results next time
 element.retrieval.min.general.score=0.4
+
 # this score defines the threshold value of pattern match identification by OpenCV library, top visual matches which reach this score
 # will be passed to the model in order get the best one which matches the visual appearance and textual description
 element.locator.visual.similarity.threshold=0.8
+
 # the max amount of matches by OpenCV library which will be selected for each target UI element screenshot. Those matches will be
 # passed to the model in order get the best one which matches the visual appearance and textual description
 element.locator.top.visual.matches=3
+
+# The maximum allowed deviation ratio for the dimensions (width and height) of a found visual match compared to the original element's dimensions.
+# This parameter is used in the ORB (Oriented FAST and Rotated BRIEF) feature detection algorithm to filter out potential matches that are significantly
+# different in size from the element being searched for. A value of 0.3 means that a found match can be at most 30% larger than the original element
+# in either width or height to be considered a valid match. This helps in improving the accuracy of visual searches by eliminating scale-invariant
+# matches that are not contextually appropriate.
+element.locator.found.matches.dimension.deviation.ratio=0.3

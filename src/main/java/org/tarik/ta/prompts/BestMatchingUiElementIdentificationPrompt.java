@@ -15,34 +15,31 @@
  */
 package org.tarik.ta.prompts;
 
-import com.google.gson.Gson;
 import dev.langchain4j.data.message.Content;
 import org.jetbrains.annotations.NotNull;
 import org.tarik.ta.dto.UiElementIdentificationResult;
+import org.tarik.ta.rag.model.UiElement;
 
 import java.awt.image.BufferedImage;
-import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
-import static java.util.stream.Collectors.joining;
-import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 
 public class BestMatchingUiElementIdentificationPrompt extends StructuredResponsePrompt<UiElementIdentificationResult> {
     private static final String SYSTEM_PROMPT_FILE_NAME = "find_best_matching_ui_element_id.txt";
     private static final String TARGET_ELEMENT_DESCRIPTION_PLACEHOLDER = "target_element_description";
-    private static final String ELEMENTS_AGENDA_PLACEHOLDER = "elements_agenda";
-    private static final Gson GSON = new Gson();
     private final BufferedImage screenshot;
+    private final List<String> boundingBoxColors;
 
     private BestMatchingUiElementIdentificationPrompt(@NotNull Map<String, String> systemMessagePlaceholders,
                                                       @NotNull Map<String, String> userMessagePlaceholders,
-                                                      @NotNull BufferedImage screenshot) {
+                                                      @NotNull BufferedImage screenshot,
+                                                      @NotNull List<String> boundingBoxColors) {
         super(systemMessagePlaceholders, userMessagePlaceholders);
         this.screenshot = screenshot;
+        this.boundingBoxColors = boundingBoxColors;
     }
 
     public static Builder builder() {
@@ -50,16 +47,20 @@ public class BestMatchingUiElementIdentificationPrompt extends StructuredRespons
     }
 
     @Override
-    protected List<Content> getUserMessageAdditionalContents() {
-        return List.of(
-                textContent("The provided to you screenshot:\n"),
-                singleImageContent(screenshot)
-        );
+    protected String getUserMessageTemplate() {
+        return """
+                The target element: "{{%s}}".
+                
+                Bounding box colors: %s.
+                
+                And here is the screenshot with bounding boxes:
+                """
+                .formatted(TARGET_ELEMENT_DESCRIPTION_PLACEHOLDER, boundingBoxColors);
     }
 
     @Override
-    protected String getUserMessageTemplate() {
-        return "The provided to you candidate UI elements:\n{{%s}}".formatted(ELEMENTS_AGENDA_PLACEHOLDER);
+    protected List<Content> getUserMessageAdditionalContents() {
+        return List.of(singleImageContent(screenshot));
     }
 
     @Override
@@ -74,17 +75,12 @@ public class BestMatchingUiElementIdentificationPrompt extends StructuredRespons
     }
 
     public static class Builder {
-        private String targetElementDescription;
-        private Collection<UiElementCandidate> uiElementCandidates;
+        private UiElement uiElement;
         private BufferedImage screenshot;
+        private List<String> boundingBoxColors;
 
-        public Builder withTargetElementDescription(@NotNull String description) {
-            this.targetElementDescription = description;
-            return this;
-        }
-
-        public Builder withUiElementCandidates(@NotNull Collection<UiElementCandidate> uiElementCandidates) {
-            this.uiElementCandidates = uiElementCandidates;
+        public Builder withUiElement(@NotNull UiElement uiElement) {
+            this.uiElement = uiElement;
             return this;
         }
 
@@ -93,34 +89,19 @@ public class BestMatchingUiElementIdentificationPrompt extends StructuredRespons
             return this;
         }
 
+        public Builder withBoundingBoxColors(@NotNull List<String> boundingBoxColors) {
+            this.boundingBoxColors = requireNonNull(boundingBoxColors, "Bounding box colors cannot be null");
+            return this;
+        }
+
         public BestMatchingUiElementIdentificationPrompt build() {
-            checkArgument(isNotBlank(targetElementDescription), "Target element description must be set");
-            Map<String, String> systemMessagePlaceholders = Map.of(
+            checkArgument(!boundingBoxColors.isEmpty(), "Bounding box colors cannot be empty");
+            var targetElementDescription = "%s. %s %s"
+                    .formatted(uiElement.name(), uiElement.ownDescription(), uiElement.anchorsDescription());
+            Map<String, String> userMessagePlaceholders = Map.of(
                     TARGET_ELEMENT_DESCRIPTION_PLACEHOLDER, targetElementDescription
             );
-
-            var uiElementsString = uiElementCandidates.stream()
-                    .map(Builder::getElementPropsMap)
-                    .map(GSON::toJson)
-                    .collect(joining("\n"));
-            Map<String, String> userMessagePlaceholders = Map.of(
-                    ELEMENTS_AGENDA_PLACEHOLDER, uiElementsString
-            );
-            return new BestMatchingUiElementIdentificationPrompt(systemMessagePlaceholders, userMessagePlaceholders, screenshot);
+            return new BestMatchingUiElementIdentificationPrompt(Map.of(), userMessagePlaceholders, screenshot, boundingBoxColors);
         }
-
-        @NotNull
-        private static LinkedHashMap<String, String> getElementPropsMap(UiElementCandidate el) {
-            var map = new LinkedHashMap<String, String>();
-            map.put("ID", el.id());
-            //map.put("ID location", "%s of the bounding box".formatted(el.idLocation()));
-            map.put("Bounding box color", el.boundingBoxColor());
-            map.put("Details", el.details());
-            map.put("Description of surrounding elements", el.descriptionOfSurroundingElements());
-            return map;
-        }
-    }
-
-    public record UiElementCandidate(String id, String boundingBoxColor, String details, String descriptionOfSurroundingElements) {
     }
 }

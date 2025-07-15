@@ -41,7 +41,7 @@ public class KeyboardTools extends AbstractTools {
     private static final Map<String, Integer> actionableKeyCodeByNameMap = getActionableKeyCodesByName();
     private static final int MAX_KEY_INDEX = 120000;
     private static final int KEYBOARD_ACTION_DELAY_MILLIS = 500;
-    private static final int AUTO_DELAY = 50;
+    private static final int AUTO_DELAY = 30;
 
     @Tool(value = "Presses the specified keyboard key. Use this tool when you need to press a single keyboard key.")
     public static ToolExecutionResult pressKey(@P(value = "The specific value of a keyboard key which needs to be pressed, e.g. 'Ctrl', " +

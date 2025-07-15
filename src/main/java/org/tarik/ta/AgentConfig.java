@@ -58,7 +58,7 @@ public class AgentConfig {
     private static final int START_PORT = loadPropertyAsInteger("port", "PORT", "7070");
     private static final boolean UNATTENDED_MODE = parseBoolean(getProperty("unattended.mode", "UNATTENDED_MODE", "false"));
     private static final String HOST = getRequiredProperty("host", "AGENT_HOST");
-    private static final boolean TEST_MODE = parseBoolean(getProperty("test.mode", "TEST_MODE", "false"));
+    private static final boolean DEBUG_MODE = parseBoolean(getProperty("test.mode", "TEST_MODE", "false"));
 
     // RAG Config
     private static final RagDbProvider VECTOR_DB_PROVIDER = stream(RagDbProvider.values())
@@ -121,8 +121,8 @@ public class AgentConfig {
     public static String getHost() {
         return HOST;
     }
-    public static boolean isTestMode() {
-        return TEST_MODE;
+    public static boolean isDebugMode() {
+        return DEBUG_MODE;
     }
 
     // -----------------------------------------------------
@@ -241,6 +241,16 @@ public class AgentConfig {
             "3");
     public static int getElementLocatorTopVisualMatches() {
         return ELEMENT_LOCATOR_TOP_VISUAL_MATCHES;
+    }
+
+    private static final double FOUND_MATCHES_DIMENSION_DEVIATION_RATIO = Double.parseDouble(getProperty("element.locator.found.matches.dimension.deviation.ratio", "FOUND_MATCHES_DIMENSION_DEVIATION_RATIO", "0.3"));
+    public static double getFoundMatchesDimensionDeviationRatio() {
+        return FOUND_MATCHES_DIMENSION_DEVIATION_RATIO;
+    }
+
+    private static final double ELEMENT_LOCATOR_MIN_INTERSECTION_PERCENTAGE = Double.parseDouble(getProperty("element.locator.min.intersection.area.ratio", "MIN_INTERSECTION_PERCENTAGE", "0.8"));
+    public static double getElementLocatorMinIntersectionPercentage() {
+        return ELEMENT_LOCATOR_MIN_INTERSECTION_PERCENTAGE;
     }
 
     // -----------------------------------------------------

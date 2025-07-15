@@ -16,14 +16,12 @@
 package org.tarik.ta.tools;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tarik.ta.AgentConfig;
 import org.tarik.ta.dto.BoundingBox;
 import org.tarik.ta.exceptions.UserChoseTerminationException;
 import org.tarik.ta.exceptions.UserInterruptedExecutionException;
-import org.tarik.ta.prompts.BestMatchingUiElementIdentificationPrompt.UiElementCandidate;
 import org.tarik.ta.prompts.ElementDescriptionPrompt;
 import org.tarik.ta.rag.RetrieverFactory;
 import org.tarik.ta.prompts.BestMatchingUiElementIdentificationPrompt;
@@ -33,34 +31,29 @@ import org.tarik.ta.rag.model.UiElement.Screenshot;
 import org.tarik.ta.rag.UiElementRetriever;
 import org.tarik.ta.rag.UiElementRetriever.RetrievedItem;
 import org.tarik.ta.user_dialogs.*;
+import org.tarik.ta.utils.CommonUtils;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.nio.file.Paths;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.time.format.DateTimeFormatter.ofPattern;
 import static java.util.Optional.*;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.CompletableFuture.supplyAsync;
+import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.joining;
-import static java.util.stream.Collectors.toConcurrentMap;
 import static java.util.stream.Collectors.toMap;
-import static javax.imageio.ImageIO.write;
+import static java.util.stream.Stream.concat;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static org.tarik.ta.model.ModelFactory.getVisionModel;
-import static org.tarik.ta.tools.ImageMatchingUtil.findMatchingRegionsWithTemplateMatching;
-import static org.tarik.ta.tools.ImageMatchingUtil.findMatchingRegionsWithORB;
+import static org.tarik.ta.utils.ImageMatchingUtil.findMatchingRegionsWithTemplateMatching;
+import static org.tarik.ta.utils.ImageMatchingUtil.findMatchingRegionsWithORB;
 import static org.tarik.ta.utils.BoundingBoxUtil.*;
 import static org.tarik.ta.utils.CommonUtils.captureScreen;
 import static org.tarik.ta.utils.CommonUtils.getColorByName;
@@ -69,18 +62,20 @@ import static org.tarik.ta.utils.CommonUtils.getScaledBoundingBox;
 import static org.tarik.ta.utils.CommonUtils.sleepMillis;
 import static org.tarik.ta.utils.ImageUtils.cloneImage;
 import static org.tarik.ta.rag.model.UiElement.Screenshot.fromBufferedImage;
+import static org.tarik.ta.utils.ImageUtils.saveScreenshot;
 
 public class ElementLocator extends AbstractTools {
     private static final Logger LOG = LoggerFactory.getLogger(ElementLocator.class);
     private static final double MIN_TARGET_RETRIEVAL_SCORE = AgentConfig.getElementRetrievalMinTargetScore();
     private static final double MIN_GENERAL_RETRIEVAL_SCORE = AgentConfig.getElementRetrievalMinGeneralScore();
+    private static final double MIN_INTERSECTION_PERCENTAGE = AgentConfig.getElementLocatorMinIntersectionPercentage();
     private static final int USER_DIALOG_DISMISS_DELAY_MILLIS = 1000;
     private static final String BOUNDING_BOX_COLOR_NAME = AgentConfig.getElementBoundingBoxColorName();
     private static final Color BOUNDING_BOX_COLOR = getColorByName(BOUNDING_BOX_COLOR_NAME);
     private static final int TOP_N_ELEMENTS_TO_RETRIEVE = AgentConfig.getRetrieverTopN();
     private static final boolean UNATTENDED_MODE = AgentConfig.isUnattendedMode();
     private static final UiElementRetriever elementRetriever = RetrieverFactory.getUiElementRetriever();
-    private static final boolean IS_IN_DEBUG_MODE = AgentConfig.isTestMode();
+    private static final boolean DEBUG_MODE = AgentConfig.isDebugMode();
     private static final List<Color> availableBoundingBoxColors = List.of(
             Color.RED,
             Color.BLUE,
@@ -92,7 +87,6 @@ public class ElementLocator extends AbstractTools {
             Color.CYAN,
             Color.MAGENTA
     );
-    private static final String SCREENSHOTS_SAVE_FOLDER = "screens";
 
     public static Optional<Rectangle> locateElementOnTheScreen(String elementDescription) {
         var retrievedElements = elementRetriever.retrieveElementsByScore(elementDescription, TOP_N_ELEMENTS_TO_RETRIEVE,
@@ -136,7 +130,7 @@ public class ElementLocator extends AbstractTools {
 
             LOG.info("Found {} UI element(s) in DB corresponding to the description of '{}'. Element names: {}",
                     matchingUiElements.size(), elementDescription, matchingUiElements.stream().map(UiElement::name).toList());
-            return findElementAndProcessLocationResult(() -> getFinalElementLocation(elementDescription, matchingUiElements),
+            return findElementAndProcessLocationResult(() -> getFinalElementLocation(matchingUiElements.getFirst()),
                     elementDescription);
         }
     }
@@ -183,20 +177,19 @@ public class ElementLocator extends AbstractTools {
                                                                            String elementDescription) {
         var locationResult = resultSupplier.get();
         return switch (locationResult) {
-            case UiElementLocationResult(boolean patternMatch, var _, var _, Collection<UiElement> elementsUsed) when !patternMatch ->
-                    processNoPatternMatchesCase(elementDescription, elementsUsed);
-            case UiElementLocationResult(var _, boolean visualMatchByModel, var _, Collection<UiElement> elementsUsed) when
-                    !visualMatchByModel -> processNoVisualMatchCase(elementDescription, elementsUsed);
+            case UiElementLocationResult(boolean patternMatch, var _, var _, var elementUsed) when !patternMatch ->
+                    processNoPatternMatchesCase(elementDescription, elementUsed);
+            case UiElementLocationResult(var _, boolean visualMatchByModel, var _, var elementUsed) when
+                    !visualMatchByModel -> processNoVisualMatchCase(elementDescription, elementUsed);
             case UiElementLocationResult(var _, var _, Rectangle boundingBox, var _) when boundingBox != null -> {
-                LOG.info("Model has identified the best visual match for the description '{}' located at: {}",
-                        elementDescription, boundingBox);
+                LOG.info("The best visual match for the description '{}' has been located at: {}", elementDescription, boundingBox);
                 yield of(getScaledBoundingBox(boundingBox));
             }
             default -> throw new IllegalStateException("Got element location result in unexpected state: " + locationResult);
         };
     }
 
-    private static Optional<Rectangle> processNoVisualMatchCase(String elementDescription, Collection<UiElement> elementsUsed) {
+    private static Optional<Rectangle> processNoVisualMatchCase(String elementDescription, UiElement elementUsed) {
         var rootCause = ("Visual pattern matching provided results, but the model has decided that none of them visually " +
                 "matches the description '%s'. Either this is a bug, or the UI has been modified and the saved in DB UI element " +
                 "info is obsolete. Do you wish to refine the UI element info or to terminate the execution ?")
@@ -205,11 +198,11 @@ public class ElementLocator extends AbstractTools {
             LOG.warn(rootCause);
             return empty();
         } else {
-            return processNoElementFoundCaseInAttendedMode(elementDescription, elementsUsed, rootCause);
+            return processNoElementFoundCaseInAttendedMode(elementDescription, elementUsed, rootCause);
         }
     }
 
-    private static Optional<Rectangle> processNoPatternMatchesCase(String elementDescription, Collection<UiElement> elementsUsed) {
+    private static Optional<Rectangle> processNoPatternMatchesCase(String elementDescription, UiElement elementUsed) {
         var rootCause = ("Visual pattern matching provided no results within deadline. Either this is a bug, or most probably " +
                 "the UI has been modified and the saved in DB UI element info is obsolete. The element description is: '%s'. Do " +
                 "you wish to refine the UI element info or to terminate the execution ?").formatted(elementDescription);
@@ -217,20 +210,17 @@ public class ElementLocator extends AbstractTools {
             LOG.warn(rootCause);
             return empty();
         } else {
-            return processNoElementFoundCaseInAttendedMode(elementDescription, elementsUsed, rootCause);
+            return processNoElementFoundCaseInAttendedMode(elementDescription, elementUsed, rootCause);
         }
     }
 
-    private static Optional<Rectangle> processNoElementFoundCaseInAttendedMode(String elementDescription,
-                                                                               Collection<UiElement> elementsUsed,
+    private static Optional<Rectangle> processNoElementFoundCaseInAttendedMode(String elementDescription, @NotNull UiElement elementUsed,
                                                                                String rootCause) {
         return switch (NoElementFoundPopup.displayAndGetUserDecision(rootCause)) {
             case CONTINUE -> {
-                if (!elementsUsed.isEmpty()) {
-                    var message = "You could update or delete the elements which were used in the search in order to have " +
-                            "more adequate search results next time:";
-                    promptUserToRefineUiElements(elementDescription, message, elementsUsed.stream().toList());
-                }
+                var message = "You could update or delete the element which was used in the search in order to have " +
+                        "more adequate search results next time:";
+                promptUserToRefineUiElements(elementDescription, message, List.of(elementUsed));
                 yield promptUserForNextActionAfterNoElementFound(elementDescription);
             }
             case TERMINATE -> {
@@ -258,177 +248,162 @@ public class ElementLocator extends AbstractTools {
         LOG.warn("The user decided to terminate the execution. Exiting...");
     }
 
-    private static UiElementLocationResult getFinalElementLocation(String elementDescription, List<UiElement> matchingUiElements) {
+    private static UiElementLocationResult getFinalElementLocation(UiElement elementRetrievedFromMemory) {
+        var elementScreenshot = elementRetrievedFromMemory.screenshot().toBufferedImage();
+        double originalElementArea = elementScreenshot.getHeight() * elementScreenshot.getWidth();
         BufferedImage wholeScreenshot = captureScreen();
-        List<BoundingBox> identifiedByVisionBoundingBoxes = identifyBoundingBoxesUsingVision(elementDescription, wholeScreenshot);
+        List<BoundingBox> identifiedByVisionBoundingBoxes = identifyBoundingBoxesUsingVision(elementRetrievedFromMemory, wholeScreenshot);
         var featureMatchedBoundingBoxesByElementFuture = supplyAsync(() ->
-                getMatchingByFeaturesRegions(matchingUiElements, wholeScreenshot));
+                findMatchingRegionsWithORB(wholeScreenshot, elementScreenshot));
         var templateMatchedBoundingBoxesByElementFuture = supplyAsync(() ->
-                getMacthingByTemplateRegions(matchingUiElements, wholeScreenshot));
+                mergeOverlappingRectangles(findMatchingRegionsWithTemplateMatching(wholeScreenshot, elementScreenshot)));
 
-        var featureMatchedBoundingBoxesByElement = featureMatchedBoundingBoxesByElementFuture.join();
-        var templateMatchedBoundingBoxesByElement = templateMatchedBoundingBoxesByElementFuture.join();
+        var featureMatchedBoundingBoxes = featureMatchedBoundingBoxesByElementFuture.join();
+        var templateMatchedBoundingBoxes = templateMatchedBoundingBoxesByElementFuture.join();
 
-        // TODO: remove this after debug is complete
-        markElementsToPlotWithBoundingBoxes(cloneImage(wholeScreenshot), getElementsToPlot(featureMatchedBoundingBoxesByElement),
-                "opencv_features");
-        markElementsToPlotWithBoundingBoxes(cloneImage(wholeScreenshot), getElementsToPlot(templateMatchedBoundingBoxesByElement),
-                "opencv_template");
+        if (DEBUG_MODE) {
+            markElementsToPlotWithBoundingBoxes(cloneImage(wholeScreenshot),
+                    getElementToPlot(elementRetrievedFromMemory, featureMatchedBoundingBoxes), "opencv_features_original");
+            markElementsToPlotWithBoundingBoxes(cloneImage(wholeScreenshot),
+                    getElementToPlot(elementRetrievedFromMemory, templateMatchedBoundingBoxes), "opencv_template_original");
+            var visionIdentifiedBoxes = getScaledBoundingBoxes(identifiedByVisionBoundingBoxes, wholeScreenshot);
+            var image = cloneImage(wholeScreenshot);
+            visionIdentifiedBoxes.forEach(box -> drawBoundingBox(image, box, BOUNDING_BOX_COLOR));
+            saveScreenshot(image, "vision_original");
+        }
 
-        var featureRects = featureMatchedBoundingBoxesByElement.values().stream().flatMap(List::stream).toList();
-        var templateRects = templateMatchedBoundingBoxesByElement.values().stream().flatMap(List::stream).toList();
-        if (identifiedByVisionBoundingBoxes.isEmpty()) {
-            return chooseBestAlgorithmicMatch(elementDescription, matchingUiElements, templateRects, featureRects, wholeScreenshot,
-                    featureMatchedBoundingBoxesByElement);
+        if (identifiedByVisionBoundingBoxes.isEmpty() && featureMatchedBoundingBoxes.isEmpty() &&
+                templateMatchedBoundingBoxes.isEmpty()) {
+            return new UiElementLocationResult(false, false, null, elementRetrievedFromMemory);
+        } else if (identifiedByVisionBoundingBoxes.isEmpty()) {
+            LOG.info("Vision model provided no detection results, proceeding with algorithmic matches");
+            return chooseBestAlgorithmicMatch(elementRetrievedFromMemory, wholeScreenshot,
+                    featureMatchedBoundingBoxes, templateMatchedBoundingBoxes, originalElementArea);
         } else {
-            return chooseBestHybridMatch(elementDescription, matchingUiElements, identifiedByVisionBoundingBoxes, wholeScreenshot,
-                    featureRects, templateRects)
-                    .orElseGet(() -> {
-                        LOG.info("Found no common regions between vision model and any of algorithmic regions, falling back to " +
-                                "selecting the best algorithmic one");
-                        return chooseBestAlgorithmicMatch(elementDescription, matchingUiElements, templateRects, featureRects,
-                                wholeScreenshot, featureMatchedBoundingBoxesByElement);
-                    });
+            // Relying purely on bounding box identification of the vision model is a bad idea, that's why if only those results are
+            // present, we'll send these to the model once more to confirm, even if there's only a single result.
+            if (featureMatchedBoundingBoxes.isEmpty() && templateMatchedBoundingBoxes.isEmpty()) {
+                var visionIdentifiedBoxes = getScaledBoundingBoxes(identifiedByVisionBoundingBoxes, wholeScreenshot);
+                return selectBestMatchingUiElementUsingModel(elementRetrievedFromMemory, visionIdentifiedBoxes, wholeScreenshot,
+                        "vision_only");
+            } else {
+                return chooseBestCommonMatch(elementRetrievedFromMemory, identifiedByVisionBoundingBoxes, wholeScreenshot,
+                        featureMatchedBoundingBoxes, templateMatchedBoundingBoxes, originalElementArea)
+                        .orElseGet(() -> {
+                            var visionIdentifiedBoxes = getScaledBoundingBoxes(identifiedByVisionBoundingBoxes, wholeScreenshot);
+                            var algorithmicIntersections = getIntersections(featureMatchedBoundingBoxes,
+                                    templateMatchedBoundingBoxes, originalElementArea);
+                            if(!algorithmicIntersections.isEmpty()){
+                                var boxes = concat(visionIdentifiedBoxes.stream(), algorithmicIntersections.stream()).toList();
+                               return selectBestMatchingUiElementUsingModel(elementRetrievedFromMemory, boxes, wholeScreenshot,
+                                        "vision_and_algorithmic_only_intersections");
+                            } else {
+                                var boxes = Stream.of(visionIdentifiedBoxes, featureMatchedBoundingBoxes, templateMatchedBoundingBoxes)
+                                        .flatMap(Collection::stream)
+                                        .toList();
+                                return selectBestMatchingUiElementUsingModel(elementRetrievedFromMemory, boxes, wholeScreenshot,
+                                        "vision_and_algorithmic_regions_separately");
+                            }
+                        });
+            }
         }
     }
 
     @NotNull
-    private static Optional<UiElementLocationResult> chooseBestHybridMatch(String elementDescription, List<UiElement> matchingUiElements,
+    private static Optional<UiElementLocationResult> chooseBestCommonMatch(UiElement matchingUiElement,
                                                                            List<BoundingBox> identifiedByVisionBoundingBoxes,
                                                                            BufferedImage wholeScreenshot, List<Rectangle> featureRects,
-                                                                           List<Rectangle> templateRects) {
+                                                                           List<Rectangle> templateRects, double originalElementArea) {
         LOG.info("Mapping provided by vision model results to the algorithmic ones");
-        var visionIdentifiedBoxes = identifiedByVisionBoundingBoxes.stream()
-                .map(bb -> bb.getActualBoundingBox(wholeScreenshot.getWidth(), wholeScreenshot.getHeight()))
-                .toList();
-        List<Rectangle> visionAndFeatureIntersections = getIntersections(visionIdentifiedBoxes, featureRects);
-        List<Rectangle> visionAndTemplateIntersections = getIntersections(visionIdentifiedBoxes, templateRects);
-        List<Rectangle> bestIntersections = getIntersections(visionAndFeatureIntersections, visionAndTemplateIntersections);
+        var visionIdentifiedBoxes = getScaledBoundingBoxes(identifiedByVisionBoundingBoxes, wholeScreenshot);
+        var visionAndFeatureIntersections = getIntersections(visionIdentifiedBoxes, featureRects, originalElementArea);
+        var visionAndTemplateIntersections = getIntersections(visionIdentifiedBoxes, templateRects, originalElementArea);
+        var bestIntersections = getIntersections(visionAndFeatureIntersections, visionAndTemplateIntersections, originalElementArea);
 
         if (!bestIntersections.isEmpty()) {
             if (bestIntersections.size() > 1) {
                 LOG.info("Found {} common vision model and algorithmic regions, using them for further refinement by " +
                         "the model.", bestIntersections.size());
-                return of(chooseBestVisualMatch(elementDescription, Map.of(matchingUiElements.getFirst(), bestIntersections),
-                        wholeScreenshot, "intersection_feature_and_template"));
+                return of(selectBestMatchingUiElementUsingModel(matchingUiElement, bestIntersections, wholeScreenshot, "intersection_all"));
             } else {
                 LOG.info("Found a single common vision model and common algorithmic region, returning it");
-                return of(new UiElementLocationResult(true, true, bestIntersections.getFirst(), matchingUiElements));
+                return of(new UiElementLocationResult(true, true, bestIntersections.getFirst(), matchingUiElement));
             }
         } else {
             var goodIntersections = Stream.of(visionAndFeatureIntersections.stream(), visionAndTemplateIntersections.stream())
                     .flatMap(Stream::distinct)
                     .toList();
             if (!goodIntersections.isEmpty()) {
-                if (goodIntersections.size() > 1) {
-                    LOG.info("Found {} common vision model and either template or feature matching algorithms, using them for " +
-                            "further refinement by the model.", goodIntersections.size());
-                    return of(chooseBestVisualMatch(elementDescription, Map.of(matchingUiElements.getFirst(), goodIntersections),
-                            wholeScreenshot, "intersection_feature_and_template"));
-                } else {
-                    LOG.info("Found a single common region between vision model and one of algorithmic regions, returning it");
-                    return of(new UiElementLocationResult(true, true, goodIntersections.getFirst(), matchingUiElements));
-                }
+                LOG.info("Found {} common regions between vision model and either template or feature matching algorithms, " +
+                        "using them for further refinement by the model.", goodIntersections.size());
+                return of(selectBestMatchingUiElementUsingModel(matchingUiElement, goodIntersections, wholeScreenshot,
+                        "intersection_vision_and_one_algorithm"));
             } else {
+                LOG.info("Found no common regions between vision model and either template or feature matching algorithms");
                 return empty();
             }
         }
     }
 
-    private static UiElementLocationResult chooseBestAlgorithmicMatch(String elementDescription, List<UiElement> matchingUiElements,
-                                                                      List<Rectangle> templateRects, List<Rectangle> featureRects,
-                                                                      BufferedImage wholeScreenshot,
-                                                                      ConcurrentMap<UiElement, List<Rectangle>> featureMatchedBoundingBoxesByElement) {
-        LOG.info("Vision model provided no detection results, proceeding with algorithmic matches");
-        var algorithmicMatches = getIntersections(templateRects, featureRects);
-        if (!algorithmicMatches.isEmpty()) {
+    @NotNull
+    private static List<Rectangle> getScaledBoundingBoxes(List<BoundingBox> identifiedByVisionBoundingBoxes,
+                                                          BufferedImage wholeScreenshot) {
+        return identifiedByVisionBoundingBoxes.stream()
+                .map(bb -> bb.getActualBoundingBox(wholeScreenshot.getWidth(), wholeScreenshot.getHeight()))
+                .toList();
+    }
+
+    private static UiElementLocationResult chooseBestAlgorithmicMatch(UiElement matchingUiElement, BufferedImage wholeScreenshot,
+                                                                      List<Rectangle> featureMatchedBoxes,
+                                                                      List<Rectangle> templateMatchedBoxes,
+                                                                      double originalElementArea) {
+        if (templateMatchedBoxes.isEmpty() && featureMatchedBoxes.isEmpty()) {
+            LOG.info("No algorithmic matches provided for selection");
+            return new UiElementLocationResult(false, false, null, matchingUiElement);
+        }
+
+        var algorithmicIntersections = getIntersections(templateMatchedBoxes, featureMatchedBoxes, originalElementArea);
+        if (!algorithmicIntersections.isEmpty()) {
             LOG.info("Found {} common detection regions between algorithmic matches, using them for further refinement by the " +
-                    "model.", algorithmicMatches.size());
-            return chooseBestVisualMatch(elementDescription, Map.of(matchingUiElements.getFirst(), algorithmicMatches),
-                    wholeScreenshot, "intersection_feature_and_template");
+                    "model.", algorithmicIntersections.size());
+            return selectBestMatchingUiElementUsingModel(matchingUiElement, algorithmicIntersections, wholeScreenshot,
+                    "intersection_feature_and_template");
         } else {
             LOG.info("Found no common detection regions between algorithmic matches, using all originally detected regions for " +
                     "further refinement by the model.");
-            Map<UiElement, List<Rectangle>> combinedBoundingBoxes = new HashMap<>();
-            featureMatchedBoundingBoxesByElement.forEach((uiElement, boxes) -> {
-                combinedBoundingBoxes.putIfAbsent(uiElement, new LinkedList<>());
-                combinedBoundingBoxes.merge(uiElement, boxes, (existing, newOnes) -> {
-                    existing.addAll(newOnes);
-                    return existing;
-                });
-            });
-            return chooseBestVisualMatch(elementDescription, combinedBoundingBoxes, wholeScreenshot,
+            var combinedBoundingBoxes = concat(featureMatchedBoxes.stream(), templateMatchedBoxes.stream()).toList();
+            return selectBestMatchingUiElementUsingModel(matchingUiElement, combinedBoundingBoxes, wholeScreenshot,
                     "all_feature_and_template");
         }
     }
 
-    @NotNull
-    private static ConcurrentMap<UiElement, List<Rectangle>> getMacthingByTemplateRegions(List<UiElement> matchingUiElements,
-                                                                                          BufferedImage wholeScreenshot) {
-        return matchingUiElements.stream()
-                .collect(toConcurrentMap(uiElement -> uiElement, uiElement -> {
-                    var elementScreenshot = uiElement.screenshot().toBufferedImage();
-                    return mergeOverlappingRectangles(findMatchingRegionsWithTemplateMatching(wholeScreenshot,
-                            elementScreenshot));
-                }));
-    }
-
-    @NotNull
-    private static ConcurrentMap<UiElement, List<Rectangle>> getMatchingByFeaturesRegions(List<UiElement> matchingUiElements,
-                                                                                          BufferedImage wholeScreenshot) {
-        return matchingUiElements.stream()
-                .collect(toConcurrentMap(uiElement -> uiElement, uiElement -> {
-                    var elementScreenshot = uiElement.screenshot().toBufferedImage();
-                    return findMatchingRegionsWithORB(wholeScreenshot, elementScreenshot);
-                }));
-    }
-
-    private static List<BoundingBox> identifyBoundingBoxesUsingVision(String elementDescription, BufferedImage wholeScreenshot) {
+    private static List<BoundingBox> identifyBoundingBoxesUsingVision(UiElement element, BufferedImage wholeScreenshot) {
+        LOG.info("Asking model to identify bounding boxes for each element which looks like '{}'.", element.name());
         var elementBoundingBoxPrompt = ElementBoundingBoxPrompt.builder()
-                .withElementDescription(elementDescription)
+                .withUiElement(element)
                 .withScreenshot(wholeScreenshot)
                 .build();
         List<BoundingBox> identifiedByVisionBoundingBoxes;
         try (var model = getVisionModel(true)) {
             var identifiedBoundingBoxFuture = supplyAsync(() ->
-                    model.generateAndGetResponseAsObject(elementBoundingBoxPrompt, "getting bounding box from vision model"));
+                    model.generateAndGetResponseAsObject(elementBoundingBoxPrompt, "getting bounding boxes from vision model"));
             identifiedByVisionBoundingBoxes = identifiedBoundingBoxFuture.join().boundingBoxes();
             LOG.info("Model has identified bounding boxes : {}.", identifiedByVisionBoundingBoxes);
-            if (IS_IN_DEBUG_MODE && !identifiedByVisionBoundingBoxes.isEmpty()) {
-                var resultingScreenshot = cloneImage(wholeScreenshot);
-                identifiedByVisionBoundingBoxes.forEach(identifiedBoundingBox -> {
-                    drawBoundingBox(resultingScreenshot, identifiedBoundingBox.getActualBoundingBox(wholeScreenshot.getWidth(),
-                            wholeScreenshot.getHeight()), BOUNDING_BOX_COLOR);
-                });
-                saveScreenshot(resultingScreenshot, "vision");
-            }
         }
         return identifiedByVisionBoundingBoxes;
     }
 
     @NotNull
-    private static List<Rectangle> getIntersections(List<Rectangle> firstSet, List<Rectangle> secondSet) {
+    private static List<Rectangle> getIntersections(List<Rectangle> firstSet, List<Rectangle> secondSet, double originalElementArea) {
         return firstSet.stream()
                 .flatMap(r1 -> secondSet.stream()
                         .map(r1::intersection)
-                        .filter(r -> !r.isEmpty()))
+                        .filter(intersection -> !intersection.isEmpty())
+                        .filter(intersection -> {
+                            double intersectionArea = intersection.getWidth() * intersection.getHeight();
+                            return (intersectionArea / originalElementArea) >= MIN_INTERSECTION_PERCENTAGE;
+                        }))
                 .toList();
-    }
-
-    private static UiElementLocationResult chooseBestVisualMatch(String elementDescription,
-                                                                 Map<UiElement, List<Rectangle>> matchedBoundingBoxesByElement,
-                                                                 BufferedImage wholeScreenshot, String matchAlgorithm) {
-        List<UiElement> matchingUiElements = matchedBoundingBoxesByElement.keySet().stream().toList();
-        int visualMatchesAmount = matchedBoundingBoxesByElement.values().stream().mapToInt(Collection::size).sum();
-        var elementNames = matchedBoundingBoxesByElement.keySet().stream().map(UiElement::name).collect(joining("', '", "'", "'"));
-        if (visualMatchesAmount < 1) {
-            LOG.warn("No matching regions found for the following UI elements: {}", elementNames);
-            return new UiElementLocationResult(false, false, null, matchingUiElements);
-        } else {
-            LOG.info("Found {} visual match(es) corresponding to '{}'. Name(s): {}. Choosing the best one.",
-                    visualMatchesAmount, elementDescription, elementNames);
-            return getFinalUiElementLocationUsingModel(matchedBoundingBoxesByElement, wholeScreenshot, elementDescription, matchAlgorithm);
-        }
     }
 
     private static Rectangle promptUserForCreatingNewElement(String originalElementDescription) {
@@ -467,95 +442,74 @@ public class ElementLocator extends AbstractTools {
         elementRetriever.storeElement(uiElementToStore);
     }
 
-    private static UiElementLocationResult getFinalUiElementLocationUsingModel(
-            Map<UiElement, List<Rectangle>> matchedBoundingBoxesByElement,
-            BufferedImage screenshot, String targetElementDescription, String matchAlgorithm) {
+    private static UiElementLocationResult selectBestMatchingUiElementUsingModel(UiElement uiElement,
+                                                                                 List<Rectangle> matchedBoundingBoxes,
+                                                                                 BufferedImage screenshot, String matchAlgorithm) {
+        // TODO: Implement here an alternative algorithm to label bounding boxes, e.g. using unique IDs, if there's not enough colors for
+        //  all elements
+
         // First all elements must be plotted onto the screenshot with unique label so that the model knows which ID corresponds to
         // which UI element. We use available colors as unique labels
-        var originalElements = matchedBoundingBoxesByElement.keySet();
-        var boxedAmount = matchedBoundingBoxesByElement.values().stream().mapToInt(List::size).sum();
+        var boxedAmount = matchedBoundingBoxes.size();
+        checkArgument(boxedAmount > 0, "Amount of bounding boxes to plot must be > 0");
         checkArgument(boxedAmount <= availableBoundingBoxColors.size(), "Amount of bounding boxes to plot exceeds the amount " +
                 "of available colors to use as labels for disambiguation. Please increase the amount of available colors in the list");
-        var elementsToPlot = getElementsToPlot(matchedBoundingBoxesByElement);
+        var colorsToUse = new LinkedList<>(availableBoundingBoxColors);
+        var boxesWithColors = matchedBoundingBoxes.stream()
+                .collect(toMap(box -> colorsToUse.removeFirst(), identity()));
         var resultingScreenshot = cloneImage(screenshot);
+        drawBoundingBoxes(resultingScreenshot, boxesWithColors);
+        if (DEBUG_MODE) {
+            saveScreenshot(resultingScreenshot, "model_selection_%s".formatted(matchAlgorithm));
+        }
 
-        // Now asking the model to identify the element which is the best fit to the target description
-        markElementsToPlotWithBoundingBoxes(resultingScreenshot, elementsToPlot, matchAlgorithm);
-        var uiElementCandidates = elementsToPlot.stream()
-                .map(el -> new UiElementCandidate(
-                        el.id().toLowerCase(),
-                        getColorName(el.elementColor).toLowerCase(),
-                        el.uiElement().ownDescription(),
-                        el.uiElement().anchorsDescription()))
-                .toList();
-        LOG.info("Candidates: {}", uiElementCandidates);
         var prompt = BestMatchingUiElementIdentificationPrompt.builder()
-                .withUiElementCandidates(uiElementCandidates)
-                .withTargetElementDescription(targetElementDescription)
+                .withUiElement(uiElement)
                 .withScreenshot(resultingScreenshot)
                 .build();
         try (var model = getVisionModel(false)) {
-            var identifiedElement = model.generateAndGetResponseAsObject(prompt,
+            var identificationResult = model.generateAndGetResponseAsObject(prompt,
                     "identifying the best matching UI element");
-            if (identifiedElement.success()) {
-                var targetLabel = identifiedElement.elementId().toLowerCase();
-                return elementsToPlot.stream()
-                        .filter(el -> el.id().equals(targetLabel))
-                        .map(PlottedUiElement::boundingBox)
-                        .map(boundingBox -> new UiElementLocationResult(true, true, boundingBox,
-                                originalElements))
-                        .findAny()
+            if (identificationResult.success()) {
+                var targetColorName = identificationResult.boundingBoxId().toLowerCase();
+                return boxesWithColors.entrySet().stream()
+                        .filter(entry -> getColorName(entry.getKey()).equalsIgnoreCase(targetColorName))
+                        .map(Map.Entry::getValue)
+                        .findFirst()
+                        .map(box -> new UiElementLocationResult(true, true, box, uiElement))
                         .orElseGet(() -> {
-                            LOG.warn("Model returned a non-existing color label '{}' for UI element with description '{}'. " +
-                                            "The valid values were: {}", targetLabel, targetElementDescription,
-                                    elementsToPlot.stream().map(PlottedUiElement::elementColor).toList());
-                            return new UiElementLocationResult(true, false, null, originalElements);
+                            LOG.warn("Model returned a non-existing color label '{}' for UI element '{}'. " +
+                                            "The valid values were: {}", targetColorName, uiElement.name(),
+                                    boxesWithColors.keySet().stream().map(CommonUtils::getColorName).toList());
+                            return new UiElementLocationResult(true, false, null, uiElement);
                         });
             } else {
-                LOG.info("Model identified no element matching a description '{}'", targetElementDescription);
-                return new UiElementLocationResult(true, false, null, originalElements);
+                LOG.info("Model identified no bounding box which correctly marks '{}'", uiElement.name());
+                return new UiElementLocationResult(true, false, null, uiElement);
             }
         }
     }
 
     @NotNull
-    private static List<PlottedUiElement> getElementsToPlot(Map<UiElement, List<Rectangle>> matchedBoundingBoxesByElement) {
+    private static PlottedUiElement getElementToPlot(UiElement element, List<Rectangle> matchedBoundingBoxes) {
         var colorsToUse = new LinkedList<>(availableBoundingBoxColors);
-        AtomicInteger colorCounter = new AtomicInteger();
-        return matchedBoundingBoxesByElement.entrySet().stream()
-                .flatMap(boxesByElement -> boxesByElement.getValue().stream()
-                        .map(box -> new PlottedUiElement(String.valueOf(colorCounter.incrementAndGet()),
-                                colorsToUse.removeFirst(), boxesByElement.getKey(), box)))
-                .toList();
+        return new PlottedUiElement(element.name(), element, matchedBoundingBoxes.stream()
+                .collect(Collectors.toMap(_ -> colorsToUse.removeFirst(), identity())));
     }
 
-    private static void markElementsToPlotWithBoundingBoxes(BufferedImage resultingScreenshot, List<PlottedUiElement> elementsToPlot,
+    private static void markElementsToPlotWithBoundingBoxes(BufferedImage resultingScreenshot, PlottedUiElement elementToPlot,
                                                             String postfix) {
-        Map<Color, Rectangle> elementBoundingBoxesByLabel = elementsToPlot.stream()
-                .collect(toMap(PlottedUiElement::elementColor, PlottedUiElement::boundingBox));
+        Map<Color, Rectangle> elementBoundingBoxesByLabel = elementToPlot.boundingBoxes();
         drawBoundingBoxes(resultingScreenshot, elementBoundingBoxesByLabel);
-        if (IS_IN_DEBUG_MODE) {
+        if (DEBUG_MODE) {
             saveScreenshot(resultingScreenshot, postfix);
         }
     }
 
-    private static void saveScreenshot(BufferedImage resultingScreenshot, String postfix) {
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = ofPattern("yyyy_MM_dd_HH_mm_ss");
-        String timestamp = now.format(formatter);
-        var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
-                .resolve("%s_%s.png".formatted(timestamp, postfix)).toAbsolutePath();
-        try {
-            write(resultingScreenshot, "png", filePath.toFile());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private record PlottedUiElement(String id, Color elementColor, UiElement uiElement, Rectangle boundingBox) {
+    private record PlottedUiElement(String id, UiElement uiElement, Map<Color, Rectangle> boundingBoxes) {
     }
 
     private record UiElementLocationResult(boolean patternMatchFound, boolean visualMatchFound, Rectangle boundingBox,
-                                           Collection<UiElement> candidatesUsedForLocation) {
+                                           UiElement elementUsedForLocation) {
     }
 }

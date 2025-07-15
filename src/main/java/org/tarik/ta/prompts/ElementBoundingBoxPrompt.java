@@ -19,17 +19,20 @@ package org.tarik.ta.prompts;
 import dev.langchain4j.data.message.Content;
 import org.jetbrains.annotations.NotNull;
 import org.tarik.ta.dto.BoundingBoxes;
+import org.tarik.ta.rag.model.UiElement;
 
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Map;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static org.tarik.ta.utils.CommonUtils.isNotBlank;
+import static java.util.Objects.nonNull;
 
 public class ElementBoundingBoxPrompt extends StructuredResponsePrompt<BoundingBoxes> {
     private static final String SYSTEM_PROMPT_FILE_NAME = "element_bounding_box_prompt.txt";
-    private static final String ELEMENT_DESCRIPTION_PLACEHOLDER = "target_element_description";
+    private static final String ELEMENT_NAME_PLACEHOLDER = "element_name";
+    private static final String ELEMENT_OWN_DESCRIPTION_PLACEHOLDER = "element_own_description";
+    private static final String ELEMENT_ANCHORS_DESCRIPTION_PLACEHOLDER = "element_anchors_description";
     private final BufferedImage screenshot;
 
     private ElementBoundingBoxPrompt(@NotNull Map<String, String> systemMessagePlaceholders,
@@ -56,7 +59,11 @@ public class ElementBoundingBoxPrompt extends StructuredResponsePrompt<BoundingB
 
     @Override
     protected String getUserMessageTemplate() {
-        return ("Here is the screenshot:\n");
+        return """
+                The target element: "{{%s}}. {{%s}} {{%s}}"
+                
+                And here is the screenshot:
+                """.formatted(ELEMENT_NAME_PLACEHOLDER, ELEMENT_OWN_DESCRIPTION_PLACEHOLDER, ELEMENT_ANCHORS_DESCRIPTION_PLACEHOLDER);
     }
 
     @Override
@@ -65,11 +72,11 @@ public class ElementBoundingBoxPrompt extends StructuredResponsePrompt<BoundingB
     }
 
     public static class Builder {
-        private String elementDescription;
+        private UiElement uiElement;
         private BufferedImage screenshot;
 
-        public Builder withElementDescription(@NotNull String elementDescription) {
-            this.elementDescription = elementDescription;
+        public Builder withUiElement(@NotNull UiElement uiElement) {
+            this.uiElement = uiElement;
             return this;
         }
 
@@ -79,9 +86,13 @@ public class ElementBoundingBoxPrompt extends StructuredResponsePrompt<BoundingB
         }
 
         public ElementBoundingBoxPrompt build() {
-            Map<String, String> systemMessagePlaceholders = Map.of(ELEMENT_DESCRIPTION_PLACEHOLDER, elementDescription);
-            checkArgument(isNotBlank(elementDescription), "Element description must be set");
-            return new ElementBoundingBoxPrompt(systemMessagePlaceholders, Map.of(), screenshot);
+            checkArgument(nonNull(uiElement), "UI element must be set");
+            Map<String, String> userMessagePlaceholders = Map.of(
+                    ELEMENT_NAME_PLACEHOLDER, uiElement.name(),
+                    ELEMENT_OWN_DESCRIPTION_PLACEHOLDER, uiElement.ownDescription(),
+                    ELEMENT_ANCHORS_DESCRIPTION_PLACEHOLDER, uiElement.anchorsDescription()
+            );
+            return new ElementBoundingBoxPrompt(Map.of(), userMessagePlaceholders, screenshot);
         }
     }
 }

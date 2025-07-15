@@ -27,11 +27,19 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 
+import static java.nio.file.Files.createDirectories;
+import static java.time.LocalDateTime.now;
+import static java.time.format.DateTimeFormatter.ofPattern;
 import static javax.imageio.ImageIO.write;
 
 public class ImageUtils {
+    public static final String SCREENSHOTS_SAVE_FOLDER = "screens";
+
     public static Image getImage(String base64Image, String format) {
         return Image.builder()
                 .mimeType("image/" + format)
@@ -91,4 +99,18 @@ public class ImageUtils {
         WritableRaster raster = image.copyData(null);
         return new BufferedImage(cm, raster, isAlphaPremultiplied, null);
     }
+
+    public static void saveScreenshot(BufferedImage resultingScreenshot, String postfix) {
+        LocalDateTime now = now();
+        DateTimeFormatter formatter = ofPattern("yyyy_MM_dd_HH_mm_ss");
+        String timestamp = now.format(formatter);
+        var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
+                .resolve("%s_%s.png".formatted(timestamp, postfix)).toAbsolutePath();
+        try {
+            createDirectories(filePath);
+            write(resultingScreenshot, "png", filePath.toFile());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
+}

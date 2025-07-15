@@ -18,18 +18,18 @@ package org.tarik.ta.dto;
 import org.tarik.ta.annotations.JsonClassDescription;
 import org.tarik.ta.annotations.JsonFieldDescription;
 
-@JsonClassDescription("the identified best match for a target UI element")
+@JsonClassDescription("the identified best match of the bounding box for a target UI element")
 public record UiElementIdentificationResult(
-        @JsonFieldDescription("indicates whether there is at least one good match. Must be \"false\", if you're sure that there is" +
-                " no UI element candidate which matches well based on its info and visual characteristics to the provided to you " +
-                "description of target UI element, \"true\" otherwise.")
+        @JsonFieldDescription("indicates whether there is at least one good match. Must be \"false\", if you're sure that there are" +
+                " no bounding boxes which correctly mark the target UI element based on its info and visual characteristics" +
+                " \"true\" otherwise.")
         boolean success,
-        @JsonFieldDescription("contains the ID of the identified best matching UI element candidate. If the value of \"success\" field " +
+        @JsonFieldDescription("contains the ID of the identified best matching bounding box. If the value of \"success\" field " +
                 "is \"false\", this field must be an empty string, \"\".")
-        String elementId,
+        String boundingBoxId,
         @JsonFieldDescription("contains any comments regarding the results of identification. If the value of \"success\" field is " +
-                "\"true\", this field should have your comments clarifying why a specific UI element was identified as the best match " +
-                "comparing to others. If the value of \"success\" field is \"false\", this field should have your comments clarifying " +
-                "why you found no good match at all.")
+                "\"true\", this field should have your comments clarifying why a specific bounding box was identified as the best " +
+                "match comparing to others. If the value of \"success\" field is \"false\", this field should have your comments " +
+                "clarifying why you found no good match at all.")
         String message) {
 }
