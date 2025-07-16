@@ -23,13 +23,14 @@ import org.tarik.ta.dto.BoundingBox;
 import org.tarik.ta.exceptions.UserChoseTerminationException;
 import org.tarik.ta.exceptions.UserInterruptedExecutionException;
 import org.tarik.ta.prompts.ElementDescriptionPrompt;
+import org.tarik.ta.prompts.PageDescriptionPrompt;
 import org.tarik.ta.rag.RetrieverFactory;
 import org.tarik.ta.prompts.BestMatchingUiElementIdentificationPrompt;
 import org.tarik.ta.prompts.ElementBoundingBoxPrompt;
 import org.tarik.ta.rag.model.UiElement;
 import org.tarik.ta.rag.model.UiElement.Screenshot;
 import org.tarik.ta.rag.UiElementRetriever;
-import org.tarik.ta.rag.UiElementRetriever.RetrievedItem;
+import org.tarik.ta.rag.UiElementRetriever.RetrievedUiElementItem;
 import org.tarik.ta.user_dialogs.*;
 import org.tarik.ta.utils.CommonUtils;
 
@@ -37,6 +38,8 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -67,6 +70,7 @@ import static org.tarik.ta.utils.ImageUtils.saveScreenshot;
 public class ElementLocator extends AbstractTools {
     private static final Logger LOG = LoggerFactory.getLogger(ElementLocator.class);
     private static final double MIN_TARGET_RETRIEVAL_SCORE = AgentConfig.getElementRetrievalMinTargetScore();
+    private static final double MIN_PAGE_RELEVANCE_SCORE = AgentConfig.getElementRetrievalMinPageRelevanceScore();
     private static final double MIN_GENERAL_RETRIEVAL_SCORE = AgentConfig.getElementRetrievalMinGeneralScore();
     private static final double MIN_INTERSECTION_PERCENTAGE = AgentConfig.getElementLocatorMinIntersectionPercentage();
     private static final int USER_DIALOG_DISMISS_DELAY_MILLIS = 1000;
@@ -89,88 +93,171 @@ public class ElementLocator extends AbstractTools {
     );
 
     public static Optional<Rectangle> locateElementOnTheScreen(String elementDescription) {
-        var retrievedElements = elementRetriever.retrieveElementsByScore(elementDescription, TOP_N_ELEMENTS_TO_RETRIEVE,
+        var retrievedElements = elementRetriever.retrieveUiElements(elementDescription, TOP_N_ELEMENTS_TO_RETRIEVE,
                 MIN_GENERAL_RETRIEVAL_SCORE);
-        var matchingUiElements = retrievedElements.stream()
-                .filter(retrievedItem -> retrievedItem.score() >= MIN_TARGET_RETRIEVAL_SCORE)
-                .map(RetrievedItem::element)
+        var matchingByDescriptionUiElements = retrievedElements.stream()
+                .filter(retrievedUiElementItem -> retrievedUiElementItem.mainScore() >= MIN_TARGET_RETRIEVAL_SCORE)
+                .map(RetrievedUiElementItem::element)
                 .toList();
-        if (matchingUiElements.isEmpty() && !retrievedElements.isEmpty()) {
-            if (UNATTENDED_MODE) {
-                var retrievedElementsString = retrievedElements.stream()
-                        .map(el -> "%s --> %.1f".formatted(el.element().name(), el.score()))
-                        .collect(joining(", "));
-                LOG.warn("No UI elements found in vector DB which semantically match the description '{}' with the " +
-                                "similarity score > {}. The most similar element names by similarity score are: {}", elementDescription,
-                        "%.1f".formatted(MIN_TARGET_RETRIEVAL_SCORE), retrievedElementsString);
-                return empty();
-            } else {
-                // This one happens as soon as DB has some elements, but none of them has the similarity higher than the configured threshold
-                promptUserToRefinePossibleCandidateUiElements(elementDescription, retrievedElements);
-                return promptUserForNextActionAfterNoElementFound(elementDescription);
-            }
-        } else if (matchingUiElements.isEmpty()) {
-            if (UNATTENDED_MODE) {
-                LOG.warn("No UI elements found in vector DB which semantically match the description '{}' with the " +
-                        "similarity score > {}.", elementDescription, "%.1f".formatted(MIN_GENERAL_RETRIEVAL_SCORE));
-                return empty();
-            } else {
-                // This one will be seldom, because after at least some elements are in DB, they will be displayed
-                NewElementInfoNeededPopup.display(elementDescription);
-                return of(promptUserForCreatingNewElement(elementDescription));
-            }
+        if (matchingByDescriptionUiElements.isEmpty() && !retrievedElements.isEmpty()) {
+            return processNoElementsFoundInDbWithSimilarCandidatesPresentCase(elementDescription, retrievedElements);
+        } else if (matchingByDescriptionUiElements.isEmpty()) {
+            return processNoElementsFoundInDbCase(elementDescription);
         } else {
-            if (matchingUiElements.size() > 1) {
-                // TODO: Implement dialog to inform the operator that multiple elements correspond the UI element's description and that one
-                //  of them needs to have the name updated plus the its description in the test step needs to be updated as well to align
-                //  with each other
-                LOG.warn("Multiple UI elements found in vector DB which semantically match the description '{}', but only one is expected" +
-                        " in order to provide the correct visual element location results", elementDescription);
+            UiElement bestMatchingElement;
+            if (matchingByDescriptionUiElements.size() > 1) {
+                LOG.info("{} UI elements found in vector DB which semantically match the description '{}'. Scoring them based on " +
+                        "the relevance to the currently opened page.", matchingByDescriptionUiElements.size(), elementDescription);
+                var bestMatchingByDescriptionAndPageRelevanceUiElements =
+                        getBestMatchingByDescriptionAndPageRelevanceUiElements(elementDescription);
+                if (bestMatchingByDescriptionAndPageRelevanceUiElements.size() > 1) {
+                    return processMultipleElementsRelevantToPageFoundCase(elementDescription,
+                            bestMatchingByDescriptionAndPageRelevanceUiElements, retrievedElements);
+                } else if (bestMatchingByDescriptionAndPageRelevanceUiElements.isEmpty()) {
+                    return processNoElementsRelevantToPageFoundCase(elementDescription, matchingByDescriptionUiElements);
+                } else {
+                    bestMatchingElement = bestMatchingByDescriptionAndPageRelevanceUiElements.getFirst();
+                }
+            } else {
+                bestMatchingElement = matchingByDescriptionUiElements.getFirst();
             }
 
             LOG.info("Found {} UI element(s) in DB corresponding to the description of '{}'. Element names: {}",
-                    matchingUiElements.size(), elementDescription, matchingUiElements.stream().map(UiElement::name).toList());
-            return findElementAndProcessLocationResult(() -> getFinalElementLocation(matchingUiElements.getFirst()),
-                    elementDescription);
+                    matchingByDescriptionUiElements.size(), elementDescription,
+                    matchingByDescriptionUiElements.stream().map(UiElement::name).toList());
+            return findElementAndProcessLocationResult(() -> getFinalElementLocation(bestMatchingElement), elementDescription);
         }
     }
 
-    private static void promptUserToRefinePossibleCandidateUiElements(String elementDescription, List<RetrievedItem> retrievedElements) {
-        List<UiElement> elementsToRefine = retrievedElements.stream()
-                .map(RetrievedItem::element)
+    @NotNull
+    private static List<UiElement> getBestMatchingByDescriptionAndPageRelevanceUiElements(String elementDescription) {
+        String pageDescription = getPageDescriptionFromModel();
+        var retrievedWithPageRelevanceScoreElements = elementRetriever.retrieveUiElements(elementDescription,
+                pageDescription, TOP_N_ELEMENTS_TO_RETRIEVE, MIN_GENERAL_RETRIEVAL_SCORE);
+        return retrievedWithPageRelevanceScoreElements.stream()
+                .filter(retrievedUiElementItem -> retrievedUiElementItem.pageRelevanceScore() >= MIN_PAGE_RELEVANCE_SCORE)
+                .map(RetrievedUiElementItem::element)
                 .toList();
-        var message = ("I haven't found any UI elements in my Database which perfectly match the description '%s'. You could update " +
-                "or delete the closest ones matching the mentioned above description in order to have more adequate search results " +
-                "next time:").formatted(elementDescription);
-        promptUserToRefineUiElements(elementDescription, message, elementsToRefine);
     }
 
-    private static void promptUserToRefineUiElements(String elementDescription, String message, List<UiElement> elementsToRefine) {
-        UiElementRefinementPopup.display(message, elementsToRefine, elementDescription,
-                (element, _) -> {
-                    var clarifiedByUserElement = UiElementInfoPopup.displayAndGetUpdatedElement(element)
-                            .orElseThrow(UserInterruptedExecutionException::new);
-                    if (!element.equals(clarifiedByUserElement)) {
-                        try {
-                            elementRetriever.updateElement(element, clarifiedByUserElement);
-                        } catch (Exception e) {
-                            var logMessage = "Couldn't update the following UI element: " + element;
-                            LOG.error(logMessage, e);
-                            showMessageDialog(null, "Couldn't update the UI element, see the logs for details");
-                        }
-                    }
+    private static Optional<Rectangle> processMultipleElementsRelevantToPageFoundCase(String elementDescription,
+                                                                                      List<UiElement> bestMatchingByPageRelevanceUiElements,
+                                                                                      List<RetrievedUiElementItem> retrievedElements) {
+        if (UNATTENDED_MODE) {
+            var message = ("Found not a single, but %d UI elements in DB which correspond to '%s' " +
+                    "and all have the minimum required page relevance score. Please refine them using attended " +
+                    "mode.").formatted(bestMatchingByPageRelevanceUiElements.size(), elementDescription);
+            throw new IllegalStateException(message);
+        } else {
+            var reasonToRefine = ("I have found more than one UI element in my Database which have minimum page " +
+                    "relevance score and match the description '%s'").formatted(elementDescription);
+            promptUserToRefinePossibleCandidateUiElements(retrievedElements, reasonToRefine);
+            return promptUserForNextAction(elementDescription);
+        }
+    }
 
-                    return clarifiedByUserElement;
-                },
-                (element, _) -> {
-                    try {
-                        elementRetriever.removeElement(element);
-                    } catch (Exception e) {
-                        var logMessage = "Couldn't delete the following UI element: " + element;
-                        LOG.error(logMessage, e);
-                        showMessageDialog(null, "Couldn't delete the UI element, see the logs for details");
-                    }
-                });
+    private static Optional<Rectangle> processNoElementsRelevantToPageFoundCase(String elementDescription,
+                                                                                List<UiElement> originallyFoundUiElements) {
+        if (UNATTENDED_MODE) {
+            var message = ("No matching elements by page relevance found, but there were %s " +
+                    "UI elements matching the description '%s' initially. Please lower the page relevance threshold or refine them using " +
+                    "attended mode.")
+                    .formatted(originallyFoundUiElements.size(), elementDescription);
+            throw new IllegalStateException(message);
+        } else {
+            var reasonToRefine = ("I have found no UI elements in my Database which have the minimum page " +
+                    "relevance score and match the description '%s'. However, I have found %d UI elements matching this description " +
+                    "without taking into account their page relevance. If the target element is in this list, you could update its " +
+                    "description and anchors information to correspond better to the page/view where its located.")
+                    .formatted(elementDescription, originallyFoundUiElements.size());
+            promptUserToRefineUiElements(reasonToRefine, originallyFoundUiElements);
+            return promptUserForNextAction(elementDescription);
+        }
+    }
+
+
+    private static Optional<Rectangle> processNoElementsFoundInDbWithSimilarCandidatesPresentCase(String elementDescription,
+                                                                                                  List<RetrievedUiElementItem> retrievedElements) {
+        if (UNATTENDED_MODE) {
+            var retrievedElementsString = retrievedElements.stream()
+                    .map(el -> "%s --> %.1f".formatted(el.element().name(), el.mainScore()))
+                    .collect(joining(", "));
+            LOG.warn("No UI elements found in vector DB which semantically match the description '{}' with the " +
+                            "similarity mainScore > {}. The most similar element names by similarity mainScore are: {}", elementDescription,
+                    "%.1f".formatted(MIN_TARGET_RETRIEVAL_SCORE), retrievedElementsString);
+            return empty();
+        } else {
+            // This one happens as soon as DB has some elements, but none of them has the similarity higher than the configured threshold
+            var reasonToRefine = "I haven't found any UI elements in my Database which perfectly match the description '%s'"
+                    .formatted(elementDescription);
+            promptUserToRefinePossibleCandidateUiElements(retrievedElements, reasonToRefine);
+            return promptUserForNextAction(elementDescription);
+        }
+    }
+
+
+    @NotNull
+    private static Optional<Rectangle> processNoElementsFoundInDbCase(String elementDescription) {
+        if (UNATTENDED_MODE) {
+            LOG.warn("No UI elements found in vector DB which semantically match the description '{}' with the " +
+                    "similarity mainScore > {}.", elementDescription, "%.1f".formatted(MIN_GENERAL_RETRIEVAL_SCORE));
+            return empty();
+        } else {
+            // This one will be seldom, because after at least some elements are in DB, they will be displayed
+            NewElementInfoNeededPopup.display(elementDescription);
+            return of(promptUserForCreatingNewElement(elementDescription));
+        }
+    }
+
+    private static String getPageDescriptionFromModel() {
+        var pageDescriptionPrompt = PageDescriptionPrompt.builder()
+                .withScreenshot(captureScreen())
+                .build();
+        try (var model = getVisionModel(false)) {
+            var pageDescriptionResult = model.generateAndGetResponseAsObject(pageDescriptionPrompt,
+                    "generating the description of the page relative to the element");
+            return pageDescriptionResult.pageDescription();
+        }
+    }
+
+    private static void promptUserToRefinePossibleCandidateUiElements(List<RetrievedUiElementItem> retrievedElements,
+                                                                      String refinementReason) {
+        List<UiElement> elementsToRefine = retrievedElements.stream()
+                .map(RetrievedUiElementItem::element)
+                .toList();
+        var message = ("'%s'. You could update or delete the following ones in order to have " +
+                "more adequate search results next time:").formatted(refinementReason);
+        promptUserToRefineUiElements(message, elementsToRefine);
+    }
+
+    private static void promptUserToRefineUiElements(String message, List<UiElement> elementsToRefine) {
+        Function<UiElement, UiElement> elementUpdater = element -> {
+            var clarifiedByUserElement = UiElementInfoPopup.displayAndGetUpdatedElement(element)
+                    .orElseThrow(UserInterruptedExecutionException::new);
+            if (!element.equals(clarifiedByUserElement)) {
+                try {
+                    elementRetriever.updateElement(element, clarifiedByUserElement);
+                } catch (Exception e) {
+                    var logMessage = "Couldn't update the following UI element: " + element;
+                    LOG.error(logMessage, e);
+                    showMessageDialog(null, "Couldn't update the UI element, see the logs for details");
+                }
+            }
+
+            return clarifiedByUserElement;
+        };
+
+        Consumer<UiElement> elementRemover = element -> {
+            try {
+                elementRetriever.removeElement(element);
+            } catch (Exception e) {
+                var logMessage = "Couldn't delete the following UI element: " + element;
+                LOG.error(logMessage, e);
+                showMessageDialog(null, "Couldn't delete the UI element, see the logs for details");
+            }
+        };
+
+        UiElementRefinementPopup.display(message, elementsToRefine, elementUpdater, elementRemover);
     }
 
     private static Optional<Rectangle> findElementAndProcessLocationResult(Supplier<UiElementLocationResult> resultSupplier,
@@ -220,8 +307,8 @@ public class ElementLocator extends AbstractTools {
             case CONTINUE -> {
                 var message = "You could update or delete the element which was used in the search in order to have " +
                         "more adequate search results next time:";
-                promptUserToRefineUiElements(elementDescription, message, List.of(elementUsed));
-                yield promptUserForNextActionAfterNoElementFound(elementDescription);
+                promptUserToRefineUiElements(message, List.of(elementUsed));
+                yield promptUserForNextAction(elementDescription);
             }
             case TERMINATE -> {
                 logUserTerminationRequest();
@@ -230,8 +317,8 @@ public class ElementLocator extends AbstractTools {
         };
     }
 
-    private static Optional<Rectangle> promptUserForNextActionAfterNoElementFound(String elementDescription) {
-        return switch (NextActionAfterNoElementFoundPopup.displayAndGetUserDecision()) {
+    private static Optional<Rectangle> promptUserForNextAction(String elementDescription) {
+        return switch (NextActionPopup.displayAndGetUserDecision()) {
             case RETRY_SEARCH -> locateElementOnTheScreen(elementDescription);
             case CREATE_NEW_ELEMENT -> {
                 sleepMillis(USER_DIALOG_DISMISS_DELAY_MILLIS);
@@ -293,9 +380,9 @@ public class ElementLocator extends AbstractTools {
                             var visionIdentifiedBoxes = getScaledBoundingBoxes(identifiedByVisionBoundingBoxes, wholeScreenshot);
                             var algorithmicIntersections = getIntersections(featureMatchedBoundingBoxes,
                                     templateMatchedBoundingBoxes, originalElementArea);
-                            if(!algorithmicIntersections.isEmpty()){
+                            if (!algorithmicIntersections.isEmpty()) {
                                 var boxes = concat(visionIdentifiedBoxes.stream(), algorithmicIntersections.stream()).toList();
-                               return selectBestMatchingUiElementUsingModel(elementRetrievedFromMemory, boxes, wholeScreenshot,
+                                return selectBestMatchingUiElementUsingModel(elementRetrievedFromMemory, boxes, wholeScreenshot,
                                         "vision_and_algorithmic_only_intersections");
                             } else {
                                 var boxes = Stream.of(visionIdentifiedBoxes, featureMatchedBoundingBoxes, templateMatchedBoundingBoxes)
@@ -424,7 +511,8 @@ public class ElementLocator extends AbstractTools {
             var uiElementDescriptionResult = model.generateAndGetResponseAsObject(prompt,
                     "generating the description of selected UI element");
             var describedUiElement = new UiElement(randomUUID(), uiElementDescriptionResult.name(),
-                    uiElementDescriptionResult.ownDescription(), uiElementDescriptionResult.anchorsDescription(), null);
+                    uiElementDescriptionResult.ownDescription(), uiElementDescriptionResult.anchorsDescription(),
+                    uiElementDescriptionResult.pageSummary(), null);
             var clarifiedByUserElement = UiElementInfoPopup.displayAndGetUpdatedElement(describedUiElement)
                     .orElseThrow(UserInterruptedExecutionException::new);
             var elementBoundingBox = elementCaptureResult.boundingBox();
@@ -438,7 +526,7 @@ public class ElementLocator extends AbstractTools {
     private static void initializeAndSaveNewUiElementIntoDb(BufferedImage elementScreenshot, UiElement uiElement) {
         Screenshot screenshot = fromBufferedImage(elementScreenshot, "png");
         UiElement uiElementToStore = new UiElement(randomUUID(), uiElement.name(), uiElement.ownDescription(),
-                uiElement.anchorsDescription(), screenshot);
+                uiElement.anchorsDescription(), uiElement.pageSummary(), screenshot);
         elementRetriever.storeElement(uiElementToStore);
     }
 
@@ -456,7 +544,7 @@ public class ElementLocator extends AbstractTools {
                 "of available colors to use as labels for disambiguation. Please increase the amount of available colors in the list");
         var colorsToUse = new LinkedList<>(availableBoundingBoxColors);
         var boxesWithColors = matchedBoundingBoxes.stream()
-                .collect(toMap(box -> colorsToUse.removeFirst(), identity()));
+                .collect(toMap(_ -> colorsToUse.removeFirst(), identity()));
         var resultingScreenshot = cloneImage(screenshot);
         drawBoundingBoxes(resultingScreenshot, boxesWithColors);
         if (DEBUG_MODE) {
@@ -466,6 +554,7 @@ public class ElementLocator extends AbstractTools {
         var prompt = BestMatchingUiElementIdentificationPrompt.builder()
                 .withUiElement(uiElement)
                 .withScreenshot(resultingScreenshot)
+                .withBoundingBoxColors(boxesWithColors.keySet().stream().map(CommonUtils::getColorName).toList())
                 .build();
         try (var model = getVisionModel(false)) {
             var identificationResult = model.generateAndGetResponseAsObject(prompt,

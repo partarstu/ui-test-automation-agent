@@ -131,6 +131,16 @@ class AgentTest {
                 .arguments(MOCK_TOOL_ARGS)
                 .build();
         lenient().when(mockAiMessage.toolExecutionRequests()).thenReturn(List.of(toolRequest));
+
+        // Default stub for TestCaseExecutionPlanPrompt
+        lenient().when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), eq("test case execution plan generation")))
+                .thenAnswer(invocation -> {
+                    TestCaseExecutionPlanPrompt prompt = invocation.getArgument(0);
+                    List<TestStepExecutionPlan> plans = prompt.getTestSteps().stream()
+                            .map(stepInfo -> new TestStepExecutionPlan(stepInfo.id(), MOCK_TOOL_NAME, MOCK_TOOL_ARGS_LIST))
+                            .toList();
+                    return new TestCaseExecutionPlan(plans);
+                });
     }
 
     @AfterEach

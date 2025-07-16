@@ -22,11 +22,13 @@ import java.util.List;
 public interface UiElementRetriever {
     void storeElement(UiElement uiElement);
 
-    List<RetrievedItem> retrieveElementsByScore(String query, int topN, double minScore);
+    List<RetrievedUiElementItem> retrieveUiElements(String nameQuery, int topN, double minScore);
+
+    List<RetrievedUiElementItem> retrieveUiElements(String nameQuery, String pageDescription, int topN, double minScore);
 
     void updateElement(UiElement originalUiElement, UiElement updatedUiElement);
 
     void removeElement(UiElement uiElement);
 
-    record RetrievedItem(UiElement element, double score){}
+    record RetrievedUiElementItem(UiElement element, double mainScore, double pageRelevanceScore){}
 }

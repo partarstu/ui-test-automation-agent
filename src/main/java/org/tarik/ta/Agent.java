@@ -15,8 +15,6 @@
  */
 package org.tarik.ta;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -333,18 +331,6 @@ public class Agent {
                     "The requested tool '%s' is not registered, please fix the prompt".formatted(toolName));
         }
         return allToolsByName.get(toolName);
-    }
-
-    private static @NotNull Object[] parseArgumentsJson(String argsJson, Method method) {
-        try {
-            Map<String, Object> argumentsMap = OBJECT_MAPPER.readValue(argsJson, new TypeReference<>() {
-            });
-            return Arrays.stream(method.getParameters())
-                    .map(parameter -> OBJECT_MAPPER.convertValue(argumentsMap.get(parameter.getName()), parameter.getType()))
-                    .toArray();
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Couldn't parse the tool arguments JSON: %s".formatted(argsJson), e);
-        }
     }
 
     @NotNull

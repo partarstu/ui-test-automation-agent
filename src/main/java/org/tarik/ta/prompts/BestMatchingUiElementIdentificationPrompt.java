@@ -51,7 +51,7 @@ public class BestMatchingUiElementIdentificationPrompt extends StructuredRespons
         return """
                 The target element: "{{%s}}".
                 
-                Bounding box colors: %s.
+                Bounding box IDs: %s.
                 
                 And here is the screenshot with bounding boxes:
                 """

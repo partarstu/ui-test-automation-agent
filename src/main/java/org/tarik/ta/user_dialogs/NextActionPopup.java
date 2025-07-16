@@ -21,7 +21,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class NextActionAfterNoElementFoundPopup extends AbstractDialog {
+public class NextActionPopup extends AbstractDialog {
 
     public enum UserDecision {
         CREATE_NEW_ELEMENT,
@@ -33,7 +33,7 @@ public class NextActionAfterNoElementFoundPopup extends AbstractDialog {
     private static final String DEFAULT_INPUT_MESSAGE = "What would you like to do next ?"; // New constant
     private final AtomicReference<UserDecision> userDecision = new AtomicReference<>(UserDecision.TERMINATE);
 
-    private NextActionAfterNoElementFoundPopup(String message) {
+    private NextActionPopup(String message) {
         super(TITLE);
         var userMessageArea = getUserMessageArea(message);
 
@@ -73,7 +73,7 @@ public class NextActionAfterNoElementFoundPopup extends AbstractDialog {
 
     public static UserDecision displayAndGetUserDecision(String message) {
         String actualMessage = CommonUtils.isNotBlank(message) ? message : DEFAULT_INPUT_MESSAGE;
-        var popup = new NextActionAfterNoElementFoundPopup(actualMessage);
+        var popup = new NextActionPopup(actualMessage);
         waitForUserInteractions(popup);
         return popup.userDecision.get();
     }

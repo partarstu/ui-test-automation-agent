@@ -29,6 +29,7 @@ public class UiElementInfoPopup extends AbstractDialog {
     private final JTextArea nameField;
     private final JTextArea descriptionArea;
     private final JTextArea anchorsArea;
+    private final JTextArea pageSummaryArea;
     private final UiElement originalElement;
     private boolean windowClosedByUser = false;
 
@@ -47,6 +48,8 @@ public class UiElementInfoPopup extends AbstractDialog {
         nameField = addLabelWithValueField("Name", originalElement.name(), contentPanel);
         descriptionArea = addLabelWithValueField("Description", originalElement.ownDescription(), contentPanel);
         anchorsArea = addLabelWithValueField("Surrounding UI elements description", originalElement.anchorsDescription(), contentPanel);
+        pageSummaryArea = addLabelWithValueField("Name or short description of the page on which the element is located",
+                originalElement.pageSummary(), contentPanel);
 
         panel.add(contentPanel, BorderLayout.CENTER);
 
@@ -82,11 +85,11 @@ public class UiElementInfoPopup extends AbstractDialog {
     }
 
     private UiElement getUiElement() {
-        if(!windowClosedByUser){
+        if (!windowClosedByUser) {
             return new UiElement(originalElement.uuid(), nameField.getText().trim(), descriptionArea.getText().trim(),
-                    anchorsArea.getText().trim(), originalElement.screenshot());
+                    anchorsArea.getText().trim(), pageSummaryArea.getText().trim(), originalElement.screenshot());
         } else {
-         return null;
+            return null;
         }
     }
 

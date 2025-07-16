@@ -242,7 +242,7 @@ public class ImageMatchingUtil {
         ));
 
         if (boundingRect.width <= maxAllowedRegionWidth && boundingRect.height <= maxAllowedRegionHeight) {
-            // The score is the number of inliers from the RANSAC homography calculation, which is a robust measure of match quality.
+            // The mainScore is the number of inliers from the RANSAC homography calculation, which is a robust measure of match quality.
             Rectangle boundingBox = new Rectangle(boundingRect.x, boundingRect.y, boundingRect.width, boundingRect.height);
             return of(new MatchResultWithRectangle(boundingBox, countNonZero(mask)));
         } else {

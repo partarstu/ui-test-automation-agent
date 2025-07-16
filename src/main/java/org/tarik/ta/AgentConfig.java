@@ -232,6 +232,10 @@ public class AgentConfig {
     public static double getElementRetrievalMinGeneralScore() {
         return ELEMENT_RETRIEVAL_MIN_GENERAL_SCORE;
     }
+    private static final double ELEMENT_RETRIEVAL_MIN_PAGE_RELEVANCE_SCORE = Double.parseDouble(getProperty("element.retrieval.min.page.relevance.score", "ELEMENT_RETRIEVAL_MIN_PAGE_RELEVANCE_SCORE", "0.5"));
+    public static double getElementRetrievalMinPageRelevanceScore() {
+        return ELEMENT_RETRIEVAL_MIN_PAGE_RELEVANCE_SCORE;
+    }
     private static final double ELEMENT_LOCATOR_VISUAL_SIMILARITY_THRESHOLD = Double.parseDouble(getProperty("element.locator.visual.similarity.threshold", "VISUAL_SIMILARITY_THRESHOLD", "0.8"));
     public static double getElementLocatorVisualSimilarityThreshold() {
         return ELEMENT_LOCATOR_VISUAL_SIMILARITY_THRESHOLD;

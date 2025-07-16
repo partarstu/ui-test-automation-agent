@@ -4,6 +4,7 @@ Based on the provided screenshot with bounding boxes plotted on it, and based on
 
 Important Considerations:
  - Each bounding box is marked with a unique color on the provided screenshot.
- - The color of each bounding box on the provided screenshot is unique and is used as its ID (e.g. red, blue, green, etc.).
+ - The color of each bounding box on the provided screenshot is unique and is used as its ID.
+ - The IDs of the boxes which are plotted on the screenshot are also provided to you.
  - Never treat the bounding box as a visual feature of the target UI element (e.g. its frame, edge etc.) - the bounding boxes are simply markers.
  - It is possible that none of the bounding boxes marks the target UI element - in this case the result of the identification will be negative.

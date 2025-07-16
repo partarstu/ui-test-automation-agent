@@ -18,10 +18,7 @@ package org.tarik.ta.rag;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.store.embedding.*;
 import dev.langchain4j.store.embedding.chroma.ChromaEmbeddingStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +28,9 @@ import java.util.Comparator;
 import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static dev.langchain4j.store.embedding.CosineSimilarity.between;
+import static dev.langchain4j.store.embedding.RelevanceScore.fromCosineSimilarity;
+import static org.tarik.ta.rag.model.UiElement.fromTextSegment;
 import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 
 public class ChromaRetriever implements UiElementRetriever {
@@ -65,8 +65,13 @@ public class ChromaRetriever implements UiElementRetriever {
     }
 
     @Override
-    public List<RetrievedItem> retrieveElementsByScore(String query, int topN, double minScore) {
-        var queryEmbedding = embeddingModel.embed(query).content();
+    public List<RetrievedUiElementItem> retrieveUiElements(String nameQuery, int topN, double minScore) {
+        return retrieveUiElements(nameQuery, "", topN, minScore);
+    }
+
+    public List<RetrievedUiElementItem> retrieveUiElements(String nameQuery, String actualPageDescription,
+                                                           int topN, double minScore) {
+        var queryEmbedding = embeddingModel.embed(nameQuery).content();
         var searchRequest = EmbeddingSearchRequest.builder()
                 .queryEmbedding(queryEmbedding)
                 .minScore(minScore)
@@ -75,11 +80,27 @@ public class ChromaRetriever implements UiElementRetriever {
         var result = embeddingStore.search(searchRequest);
         var resultingItems = result.matches().stream()
                 .sorted(Comparator.<EmbeddingMatch<TextSegment>>comparingDouble(EmbeddingMatch::score).reversed())
-                .map(match -> new RetrievedItem(UiElement.fromTextSegment(match.embedded()), match.score()))
+                .map(match -> {
+                    var element = fromTextSegment(match.embedded());
+                    var pageRelevanceScore = getPageRelevanceScore(actualPageDescription, element);
+                    return new RetrievedUiElementItem(element, match.score(), pageRelevanceScore);
+                })
                 .distinct()
                 .toList();
-        LOG.info("Retrieved {} most matching results to the query '{}'", resultingItems.size(), query);
+        LOG.info("Retrieved {} most matching results to the query '{}'", resultingItems.size(), nameQuery);
         return resultingItems;
+    }
+
+    private double getPageRelevanceScore(String actualPageDescription, UiElement uiElement) {
+        if (isNotBlank(actualPageDescription)) {
+            var pageDescriptionEmbedding = embeddingModel.embed(actualPageDescription).content();
+            var elementOverallDescription = "%s %s".formatted(uiElement.ownDescription(), uiElement.anchorsDescription());
+            var elementDescriptionEmbedding = embeddingModel.embed(elementOverallDescription).content();
+            double cosineSimilarity = between(pageDescriptionEmbedding, elementDescriptionEmbedding);
+            return fromCosineSimilarity(cosineSimilarity);
+        } else {
+            return 0;
+        }
     }
 
     @Override

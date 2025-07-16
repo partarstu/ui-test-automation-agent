@@ -243,7 +243,7 @@ class BoundingBoxUtilTest {
         when(mockBasePath.resolve(eq(expectedFileName))).thenReturn(mockFinalPath);
         when(mockFinalPath.toAbsolutePath()).thenReturn(mockFinalPath);
         when(mockFinalPath.toFile()).thenReturn(mockFile);
-        imageIoMockedStatic.when(() -> ImageIO.write(mockImage, "png", mockFile)).thenReturn(true);
+        
 
         // When
         BoundingBoxInfo info = drawBoundingBox(mockImage, TEST_RECTANGLE, TEST_COLOR);

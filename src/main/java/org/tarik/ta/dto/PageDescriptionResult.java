@@ -13,22 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.tarik.ta.dto;
 
 import org.tarik.ta.annotations.JsonClassDescription;
 import org.tarik.ta.annotations.JsonFieldDescription;
 
-@JsonClassDescription("the extracted by you information about the target UI element")
-public record UiElementDescriptionResult(
-        @JsonFieldDescription("contains the identified by you name of the target element.")
-        String name,
-
-        @JsonFieldDescription("contains the extracted by you information which describes the target element itself.")
-        String ownDescription,
-
-        @JsonFieldDescription("contains the extracted by you information about UI elements which are located nearby the target element.")
-        String anchorsDescription,
-
-        @JsonFieldDescription("contains a very short summary of the view in which the element is located.")
-        String pageSummary) {
+@JsonClassDescription("the results of the description of the screen relative to the target UI element")
+public record PageDescriptionResult(
+        @JsonFieldDescription("the description itself")
+        String pageDescription) {
 }
