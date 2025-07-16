@@ -34,7 +34,8 @@
         <guava.version>33.4.8-jre</guava.version>
         <opencv.version>4.10.0-1.5.11</opencv.version>
         <openblas.version>0.3.28-1.5.11</openblas.version>
-        <a2a.sdk.version>0.2.4-SNAPSHOT</a2a.sdk.version>
+        <commons-math3.version>3.6.1</commons-math3.version>
+        <a2a.sdk.version>0.2.3.Beta1</a2a.sdk.version>
         <main.class/>
     </properties>
 
@@ -42,11 +43,16 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-math3</artifactId>
-            <version>3.6.1</version>
+            <version>${commons-math3.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.a2a.sdk</groupId>
-            <artifactId>a2a-java-sdk-server-jakarta</artifactId>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-spec</artifactId>
+            <version>${a2a.sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-server-common</artifactId>
             <version>${a2a.sdk.version}</version>
         </dependency>
         <dependency>

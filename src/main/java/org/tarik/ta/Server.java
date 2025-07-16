@@ -15,9 +15,9 @@
  */
 package org.tarik.ta;
 
-import io.a2a.server.agentexecution.AgentExecutionResource;
+import org.tarik.ta.a2a.AgentExecutionResource;
 import io.javalin.Javalin;
-import io.javalin.json.JavalinGson;
+import io.javalin.json.JavalinJackson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,9 +35,9 @@ public class Server {
         int port = getStartPort();
         AgentExecutionResource agentExecutionResource = new AgentExecutionResource();
 
-        Javalin app = create(config -> {
+        create(config -> {
             config.http.maxRequestSize = MAX_REQUEST_SIZE;
-            config.jsonMapper(new JavalinGson());
+            config.jsonMapper(new JavalinJackson());
         })
                 .post(MAIN_PATH, ctx -> ctx.result(agentExecutionResource.handleNonStreamingRequests(ctx)))
                 .get(AGENT_CARD_PATH, agentExecutionResource::getAgentCard)

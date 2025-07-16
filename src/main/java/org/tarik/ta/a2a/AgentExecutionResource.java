@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.a2a.server.agentexecution;
+package org.tarik.ta.a2a;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.a2a.server.events.InMemoryQueueManager;
@@ -27,11 +27,6 @@ import io.javalin.http.Context;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.tarik.ta.a2a.CardProducer;
-import org.tarik.ta.a2a.UiAgentExecutor;
-
-import static io.a2a.spec.A2A.*;
-
 
 import java.util.concurrent.Executors;
 
@@ -57,13 +52,13 @@ public class AgentExecutionResource {
                 response = new JSONRPCErrorResponse(null, new UnsupportedOperationError());
             } else {
                 response = switch (method) {
-                    case GET_TASK_METHOD -> jsonRpcHandler.onGetTask(objectMapper.readValue(body, GetTaskRequest.class));
-                    case CANCEL_TASK_METHOD -> jsonRpcHandler.onCancelTask(objectMapper.readValue(body, CancelTaskRequest.class));
-                    case SET_TASK_PUSH_NOTIFICATION_CONFIG_METHOD ->
+                    case GetTaskRequest.METHOD -> jsonRpcHandler.onGetTask(objectMapper.readValue(body, GetTaskRequest.class));
+                    case CancelTaskRequest.METHOD -> jsonRpcHandler.onCancelTask(objectMapper.readValue(body, CancelTaskRequest.class));
+                    case SetTaskPushNotificationConfigRequest.METHOD ->
                             jsonRpcHandler.setPushNotification(objectMapper.readValue(body, SetTaskPushNotificationConfigRequest.class));
-                    case GET_TASK_PUSH_NOTIFICATION_CONFIG_METHOD ->
+                    case GetTaskPushNotificationConfigRequest.METHOD ->
                             jsonRpcHandler.getPushNotification(objectMapper.readValue(body, GetTaskPushNotificationConfigRequest.class));
-                    case SEND_MESSAGE_METHOD -> jsonRpcHandler.onMessageSend(objectMapper.readValue(body, SendMessageRequest.class));
+                    case SendMessageRequest.METHOD -> jsonRpcHandler.onMessageSend(objectMapper.readValue(body, SendMessageRequest.class));
                     default -> new JSONRPCErrorResponse(null, new UnsupportedOperationError());
                 };
             }

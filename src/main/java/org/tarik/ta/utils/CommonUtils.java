@@ -17,8 +17,10 @@ package org.tarik.ta.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -50,17 +52,19 @@ import static org.tarik.ta.utils.ImageUtils.toBufferedImage;
 public class CommonUtils {
     private static final Logger LOG = LoggerFactory.getLogger(CommonUtils.class);
     private static final Robot robot = getRobot();
-    protected static final Gson GSON = new Gson();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
 
     public static <T> Optional<T> deserializeJsonFromFile(String filePath, Class<T> clazz) {
         try (FileReader reader = new FileReader(filePath)) {
-            return of(GSON.fromJson(reader, clazz));
-        } catch (IOException e) {
-            var message = "Failed to read the contents of JSON file: %s".formatted(filePath);
+            return of(OBJECT_MAPPER.readValue(reader, clazz));
+        } catch (JsonProcessingException e) {
+            var message = "Invalid JSON syntax in file: %s".formatted(filePath);
             LOG.error(message, e);
             return empty();
-        } catch (JsonSyntaxException e) {
-            var message = "Invalid JSON syntax in file: %s".formatted(filePath);
+        } catch (IOException e) {
+            var message = "Failed to read the contents of JSON file: %s".formatted(filePath);
             LOG.error(message, e);
             return empty();
         }

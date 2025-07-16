@@ -15,8 +15,9 @@
  */
 package org.tarik.ta.a2a;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.a2a.server.agentexecution.AgentExecutor;
 import io.a2a.server.agentexecution.RequestContext;
 import io.a2a.server.events.EventQueue;
@@ -28,7 +29,7 @@ import org.tarik.ta.dto.TestExecutionResult;
 import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.prompts.TestCaseExtractionPrompt;
 import org.tarik.ta.utils.CommonUtils;
-import org.tarik.ta.utils.InstantAdapter;
+
 
 import java.time.Instant;
 import java.util.Collection;
@@ -50,9 +51,9 @@ import static org.tarik.ta.utils.ImageUtils.convertImageToBase64;
 public record UiAgentExecutor() implements AgentExecutor {
     private static final ExecutorService taskExecutor = newSingleThreadExecutor();
     private static final Logger LOG = LoggerFactory.getLogger(UiAgentExecutor.class);
-    private static final Gson GSON = new GsonBuilder()
-            .registerTypeAdapter(Instant.class, new InstantAdapter())
-            .create();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
 
     @Override
     public void execute(RequestContext context, EventQueue eventQueue) throws JSONRPCError {
@@ -103,7 +104,7 @@ public record UiAgentExecutor() implements AgentExecutor {
         getTestExecutionResult(requestedTestCase, updater, testCaseName).ifPresent(result -> {
             try {
                 List<Part<?>> parts = new LinkedList<>();
-                TextPart textPart = new TextPart(GSON.toJson(result), null);
+                TextPart textPart = new TextPart(OBJECT_MAPPER.writeValueAsString(result), null);
                 parts.add(textPart);
                 addScreenshots(result, parts);
                 updater.addArtifact(parts, null, null, null);
