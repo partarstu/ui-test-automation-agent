@@ -57,6 +57,7 @@ import static org.tarik.ta.AgentConfig.*;
 import static org.tarik.ta.dto.TestExecutionResult.TestExecutionStatus.*;
 import static org.tarik.ta.model.ModelFactory.getInstructionModel;
 import static org.tarik.ta.model.ModelFactory.getVisionModel;
+import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.ERROR;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.utils.CommonUtils.*;
 import static org.tarik.ta.utils.ImageUtils.saveScreenshot;
@@ -86,7 +87,7 @@ public class Agent {
             TestExecutionResult result = executeTestCase(testCase);
             LOG.info("Finished Agent execution for test case: {}", testCase.name());
             System.out.println(result);
-            if (result.getTestExecutionStatus() != PASSED) {
+            if (result.testExecutionStatus() != PASSED) {
                 exit(ERROR_STATUS);
             }
         }, () -> {
@@ -138,7 +139,7 @@ public class Agent {
                     var errorMessage = "Failure while executing action '%s'. Root cause: %s"
                             .formatted(actionInstruction, actionResult.message());
                     addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, null, executionStartTimestamp, now());
-                    return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, captureScreen(),
+                    return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null,
                             testExecutionStartTimestamp, now(), errorMessage);
                 }
                 LOG.info("Action execution complete.");
@@ -150,11 +151,11 @@ public class Agent {
                     LOG.info("Executing verification: '{}'", finalInstruction);
                     var verificationResult = processVerificationRequest(finalInstruction, actionInstruction);
                     if (!verificationResult.success()) {
-                        var errorMessage = "Verification failed. %s"               .formatted(verificationResult.message());
+                        var errorMessage = "Verification failed. %s".formatted(verificationResult.message());
                         addFailedTestStepWithScreenshot(testStep, stepResults, errorMessage, verificationResult.message(),
                                 executionStartTimestamp, now());
-                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, captureScreen(), testExecutionStartTimestamp,
-                                now(), errorMessage);
+                        return new TestExecutionResult(testCase.name(), FAILED, stepResults, null, testExecutionStartTimestamp, now(),
+                                errorMessage);
                     }
                     LOG.info("Verification execution complete.");
                     actualResult = verificationResult.message();
@@ -164,8 +165,7 @@ public class Agent {
             } catch (Exception e) {
                 LOG.error("Unexpected error while executing the test step: '{}'", testStep.stepDescription(), e);
                 addFailedTestStepWithScreenshot(testStep, stepResults, e.getMessage(), null, now(), now());
-                return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, captureScreen(),
-                        testExecutionStartTimestamp,
+                return new TestExecutionResult(testCase.name(), TestExecutionStatus.ERROR, stepResults, null, testExecutionStartTimestamp,
                         now(), e.getMessage());
             }
         }
@@ -243,7 +243,7 @@ public class Agent {
                                                                           @NotNull String actionIncludingData) {
         return executeWithRetries(VERIFICATION_RETRY_TIMEOUT_MILLIS, VERIFICATION_EXECUTION, (model) -> {
             var screenshot = captureScreen();
-            if(DEBUG_MODE){
+            if (DEBUG_MODE) {
                 saveScreenshot(screenshot, "verification");
             }
             var prompt = VerificationExecutionPrompt.builder()
@@ -301,12 +301,13 @@ public class Agent {
     }
 
     private static ToolExecutionResult executeRequestedTool(String toolName, List<String> args) {
-        LOG.info("Model requested an execution of the tool '{}' with the following arguments map: <{}>", toolName, args);
+        LOG.info("Model requested an execution of the tool '{}' with the following arguments: <{}>", toolName, args);
         var tool = getTool(toolName);
         Class<?> toolClass = tool.clazz();
         int paramsAmount = tool.toolSpecification().parameters().properties().size();
-        checkArgument(paramsAmount == args.size(), "Model requested '%s' tool with %s params, but this tool has only %s params.",
-                toolName, paramsAmount, args.size());
+        checkArgument(paramsAmount == args.size(),
+                "Model requested tool '%s' with %s arguments, but the tool requires %s arguments.",
+                toolName, args.size(), paramsAmount);
         var method = getToolClassMethod(toolClass, toolName, paramsAmount);
         var arguments = args.toArray();
         return getToolExecutionResult(toolName, arguments, method, toolClass);
@@ -320,8 +321,14 @@ public class Agent {
         } catch (IllegalAccessException e) {
             throw new RuntimeException("Access denied while invoking tool '%s'".formatted(toolName), e);
         } catch (InvocationTargetException e) {
-            LOG.error("Exception thrown by tool '{}': {}", toolName, (ofNullable(e.getMessage()).orElse("Unknown Cause")), e);
-            throw new RuntimeException("'%s' tool execution failed because of internal error.".formatted(toolName), e);
+            if (e.getTargetException() instanceof IllegalArgumentException illegalArgumentException) {
+                LOG.error("Illegal arguments provided for tool '{}'", toolName, illegalArgumentException);
+                return new ToolExecutionResult(ERROR, "Invalid arguments for tool '%s': %s"
+                        .formatted(toolName, illegalArgumentException.getMessage()), false);
+            } else {
+                LOG.error("Exception thrown by tool '{}': {}", toolName, (ofNullable(e.getMessage()).orElse("Unknown Cause")), e);
+                throw new RuntimeException("'%s' tool execution failed because of internal error.".formatted(toolName), e);
+            }
         }
     }
 

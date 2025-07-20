@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.tarik.ta;
 
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.model.chat.response.ChatResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.tarik.ta.dto.*;
 import org.tarik.ta.dto.TestExecutionResult.TestExecutionStatus;
@@ -31,7 +31,6 @@ import org.tarik.ta.helper_entities.TestCase;
 import org.tarik.ta.helper_entities.TestStep;
 import org.tarik.ta.model.GenAiModel;
 import org.tarik.ta.model.ModelFactory;
-import org.tarik.ta.prompts.ActionExecutionPrompt;
 import org.tarik.ta.prompts.TestCaseExecutionPlanPrompt;
 import org.tarik.ta.prompts.VerificationExecutionPrompt;
 import org.tarik.ta.tools.AbstractTools.ToolExecutionResult;
@@ -42,7 +41,12 @@ import org.tarik.ta.utils.ImageUtils;
 import java.awt.image.BufferedImage;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
+import static java.lang.String.format;
+import static java.util.Optional.*;
+import static java.util.stream.Collectors.joining;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.*;
@@ -54,16 +58,16 @@ import static org.tarik.ta.model.ModelFactory.getVisionModel;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.ERROR;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.tools.CommonTools.waitSeconds;
+import static org.tarik.ta.utils.CommonUtils.getObjectPrettyPrinted;
 import static org.tarik.ta.utils.CommonUtils.sleepMillis;
 
 @ExtendWith(MockitoExtension.class)
 class AgentTest {
+    private static final String TEST_CASE_EXECUTION_PLAN_GENERATION = "test case execution plan generation";
+    private static final UUID UUID_1 = UUID.fromString("a1b2c3d4-e5f6-7890-1234-567890abcde1");
+    private static final UUID UUID_2 = UUID.fromString("a1b2c3d4-e5f6-7890-1234-567890abcde2");
     @Mock
     private GenAiModel mockModel;
-    @Mock
-    private AiMessage mockAiMessage;
-    @Mock
-    private ChatResponse mockChatResponse;
     @Mock
     private BufferedImage mockScreenshot;
 
@@ -73,6 +77,7 @@ class AgentTest {
     private MockedStatic<AgentConfig> agentConfigMockedStatic;
     private MockedStatic<CommonTools> commonToolsMockedStatic;
     private MockedStatic<ImageUtils> imageUtilsMockedStatic;
+    private MockedStatic<UUID> uuidMockedStatic;
 
 
     // Constants for configuration
@@ -82,24 +87,22 @@ class AgentTest {
     private static final int VERIFICATION_DELAY_MILLIS = 5;
     private static final int TOOL_PARAM_WAIT_AMOUNT_SECONDS = 1;
     private static final String MOCK_TOOL_NAME = "waitSeconds";
-    private static final String MOCK_TOOL_ARGS = "{\"arg0\":\"%d\"}".formatted(TOOL_PARAM_WAIT_AMOUNT_SECONDS);
-    private static final List<String> MOCK_TOOL_ARGS_LIST = List.of(""+TOOL_PARAM_WAIT_AMOUNT_SECONDS);
-    private static final String MOCK_TOOL_ID = "mockToolId123";
+    private static final List<String> MOCK_TOOL_ARGS_LIST = List.of("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS);
+    private static final UUID MOCK_UUID = UUID.fromString("a1b2c3d4-e5f6-7890-1234-567890abcdef");
 
 
     @BeforeEach
     void setUp() {
-
         modelFactoryMockedStatic = mockStatic(ModelFactory.class);
         commonUtilsMockedStatic = mockStatic(CommonUtils.class);
         agentConfigMockedStatic = mockStatic(AgentConfig.class);
         commonToolsMockedStatic = mockStatic(CommonTools.class);
         imageUtilsMockedStatic = mockStatic(ImageUtils.class);
-
+        uuidMockedStatic = mockStatic(UUID.class);
 
         // Model Factory
-        modelFactoryMockedStatic.when(()->getInstructionModel(anyBoolean())).thenReturn(mockModel);
-        modelFactoryMockedStatic.when(()->getVisionModel(anyBoolean())).thenReturn(mockModel);
+        modelFactoryMockedStatic.when(() -> getInstructionModel(anyBoolean())).thenReturn(mockModel);
+        modelFactoryMockedStatic.when(() -> getVisionModel(anyBoolean())).thenReturn(mockModel);
 
         // Common Utils & ImageUtils
         commonUtilsMockedStatic.when(() -> CommonUtils.isNotBlank(anyString())).thenCallRealMethod();
@@ -117,30 +120,15 @@ class AgentTest {
         agentConfigMockedStatic.when(AgentConfig::getTestStepExecutionRetryIntervalMillis).thenReturn(RETRY_INTERVAL_MILLIS);
         agentConfigMockedStatic.when(AgentConfig::getActionVerificationDelayMillis).thenReturn(VERIFICATION_DELAY_MILLIS);
 
-
-        lenient().when(mockModel.generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution")))
-                .thenReturn(mockChatResponse);
         lenient().when(mockModel.generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class),
                         eq("verification execution")))
                 .thenReturn(new VerificationExecutionResult(true, "Verification successful"));
-        lenient().when(mockChatResponse.aiMessage()).thenReturn(mockAiMessage);
-        lenient().when(mockAiMessage.hasToolExecutionRequests()).thenReturn(true);
-        ToolExecutionRequest toolRequest = ToolExecutionRequest.builder()
-                .id(MOCK_TOOL_ID)
-                .name(MOCK_TOOL_NAME)
-                .arguments(MOCK_TOOL_ARGS)
-                .build();
-        lenient().when(mockAiMessage.toolExecutionRequests()).thenReturn(List.of(toolRequest));
 
-        // Default stub for TestCaseExecutionPlanPrompt
-        lenient().when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), eq("test case execution plan generation")))
-                .thenAnswer(invocation -> {
-                    TestCaseExecutionPlanPrompt prompt = invocation.getArgument(0);
-                    List<TestStepExecutionPlan> plans = prompt.getTestSteps().stream()
-                            .map(stepInfo -> new TestStepExecutionPlan(stepInfo.id(), MOCK_TOOL_NAME, MOCK_TOOL_ARGS_LIST))
-                            .toList();
-                    return new TestCaseExecutionPlan(plans);
-                });
+        lenient().when(UUID.randomUUID()).thenReturn(MOCK_UUID);
+        var toolExecutionRequest = new TestStepExecutionPlan(MOCK_UUID.toString(), MOCK_TOOL_NAME, MOCK_TOOL_ARGS_LIST);
+        var testCaseExecutionPlan = new TestCaseExecutionPlan(List.of(toolExecutionRequest));
+        lenient().when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString()))
+                .thenReturn(testCaseExecutionPlan);
     }
 
     @AfterEach
@@ -151,6 +139,7 @@ class AgentTest {
         agentConfigMockedStatic.close();
         commonToolsMockedStatic.close();
         imageUtilsMockedStatic.close();
+        uuidMockedStatic.close();
     }
 
     @Test
@@ -164,18 +153,18 @@ class AgentTest {
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(PASSED);
-        assertThat(result.getExecutionStartTimestamp()).isNotNull();
-        assertThat(result.getExecutionEndTimestamp()).isNotNull();
-        assertThat(result.getStepResults()).hasSize(1);
-        assertThat(result.getStepResults().getFirst().isSuccessful()).isTrue();
-        assertThat(result.getStepResults().getFirst().getExecutionStartTimestamp()).isNotNull();
-        assertThat(result.getStepResults().getFirst().getExecutionEndTimestamp()).isNotNull();
+        assertThat(result.testExecutionStatus()).isEqualTo(PASSED);
+        assertThat(result.executionStartTimestamp()).isNotNull();
+        assertThat(result.executionEndTimestamp()).isNotNull();
+        assertThat(result.stepResults()).hasSize(1);
+        assertThat(result.stepResults().getFirst().success()).isTrue();
+        assertThat(result.stepResults().getFirst().executionStartTimestamp()).isNotNull();
+        assertThat(result.stepResults().getFirst().executionEndTimestamp()).isNotNull();
 
-        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
+        verify(mockModel).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), eq(TEST_CASE_EXECUTION_PLAN_GENERATION));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)));
         commonUtilsMockedStatic.verify(() -> sleepMillis(VERIFICATION_DELAY_MILLIS));
-        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(2));
+        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(1));
         verify(mockModel).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), eq("verification execution"));
     }
 
@@ -190,28 +179,37 @@ class AgentTest {
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(PASSED);
-        assertThat(result.getExecutionStartTimestamp()).isNotNull();
-        assertThat(result.getExecutionEndTimestamp()).isNotNull();
-        assertThat(result.getStepResults()).hasSize(1);
-        assertThat(result.getStepResults().getFirst().isSuccessful()).isTrue();
-        assertThat(result.getStepResults().getFirst().getExecutionStartTimestamp()).isNotNull();
-        assertThat(result.getStepResults().getFirst().getExecutionEndTimestamp()).isNotNull();
+        assertThat(result.testExecutionStatus()).isEqualTo(PASSED);
+        assertThat(result.executionStartTimestamp()).isNotNull();
+        assertThat(result.executionEndTimestamp()).isNotNull();
+        assertThat(result.stepResults()).hasSize(1);
+        assertThat(result.stepResults().getFirst().success()).isTrue();
+        assertThat(result.stepResults().getFirst().executionStartTimestamp()).isNotNull();
+        assertThat(result.stepResults().getFirst().executionEndTimestamp()).isNotNull();
 
-        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
+        verify(mockModel).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), eq(TEST_CASE_EXECUTION_PLAN_GENERATION));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)));
         commonUtilsMockedStatic.verify(() -> sleepMillis(anyInt()), never());
-        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(1));
-        verify(mockModel, never()).generateAndGetResponseAsObject(any(), any());
+        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, never());
+        verify(mockModel, never()).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), anyString());
     }
 
     @Test
     @DisplayName("Multiple steps with actions and successful verifications including test data")
     void multipleStepsIncludingTestDataSuccess() {
         // Given
+        when(UUID.randomUUID()).thenReturn(UUID_1, UUID_2, MOCK_UUID);
+
         TestStep step1 = new TestStep("Action 1", null, "Verify 1");
         TestStep step2 = new TestStep("Action 2", List.of("data"), "Verify 2"); // With test data
         TestCase testCase = new TestCase("Multi-Step Success", null, List.of(step1, step2));
+
+        var plan1 = new TestStepExecutionPlan(UUID_1.toString(), MOCK_TOOL_NAME, MOCK_TOOL_ARGS_LIST);
+        var plan2 = new TestStepExecutionPlan(UUID_2.toString(), MOCK_TOOL_NAME, MOCK_TOOL_ARGS_LIST);
+        var testCaseExecutionPlan = new TestCaseExecutionPlan(List.of(plan1, plan2));
+        when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString()))
+                .thenReturn(testCaseExecutionPlan);
+
         commonToolsMockedStatic.when(() -> waitSeconds(eq("1")))
                 .thenReturn(new ToolExecutionResult(SUCCESS, "Wait 1 OK", false))
                 .thenReturn(new ToolExecutionResult(SUCCESS, "Wait 2 OK", false));
@@ -223,18 +221,19 @@ class AgentTest {
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(PASSED);
-        assertThat(result.getExecutionStartTimestamp()).isNotNull();
-        assertThat(result.getExecutionEndTimestamp()).isNotNull();
-        assertThat(result.getStepResults()).hasSize(2);
-        assertThat(result.getStepResults()).allMatch(TestStepResult::isSuccessful);
-        assertThat(result.getStepResults()).allMatch(stepResult -> stepResult.getExecutionStartTimestamp() != null);
-        assertThat(result.getStepResults()).allMatch(stepResult -> stepResult.getExecutionEndTimestamp() != null);
+        assertThat(result.testExecutionStatus()).isEqualTo(PASSED);
+        assertThat(result.executionStartTimestamp()).isNotNull();
+        assertThat(result.executionEndTimestamp()).isNotNull();
+        assertThat(result.stepResults()).hasSize(2);
+        assertThat(result.stepResults()).allMatch(TestStepResult::success);
+        assertThat(result.stepResults()).allMatch(stepResult -> stepResult.executionStartTimestamp() != null);
+        assertThat(result.stepResults()).allMatch(stepResult -> stepResult.executionEndTimestamp() != null);
 
-        verify(mockModel, times(2)).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
+        verify(mockModel, times(1)).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class),
+                eq(TEST_CASE_EXECUTION_PLAN_GENERATION));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("1")), times(2));
         commonUtilsMockedStatic.verify(() -> sleepMillis(VERIFICATION_DELAY_MILLIS), times(2));
-        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(3));
+        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(2));
         verify(mockModel, times(2)).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class),
                 eq("verification execution"));
     }
@@ -246,23 +245,23 @@ class AgentTest {
         List<String> testData = List.of("input1", "input2");
         TestStep step = new TestStep("Action With Data", testData, "Verify Data Action");
         TestCase testCase = new TestCase("Action Data Success", null, List.of(step));
-        String expectedInstructionFragment = "using following input data: 'input1', 'input2'";
-        ArgumentCaptor<ActionExecutionPrompt> promptCaptor = forClass(ActionExecutionPrompt.class);
+        ArgumentCaptor<TestCaseExecutionPlanPrompt> promptCaptor = forClass(TestCaseExecutionPlanPrompt.class);
 
         // When
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(PASSED);
-        assertThat(result.getExecutionStartTimestamp()).isNotNull();
-        assertThat(result.getExecutionEndTimestamp()).isNotNull();
-        verify(mockModel).generate(promptCaptor.capture(), anyList(), eq("action execution"));
-        assertThat(promptCaptor.getValue().getUserMessage().singleText()).contains(expectedInstructionFragment);
+        assertThat(result.testExecutionStatus()).isEqualTo(PASSED);
+        assertThat(result.executionStartTimestamp()).isNotNull();
+        assertThat(result.executionEndTimestamp()).isNotNull();
+        verify(mockModel).generateAndGetResponseAsObject(promptCaptor.capture(), eq(TEST_CASE_EXECUTION_PLAN_GENERATION));
+        assertThat(promptCaptor.getValue().getUserMessage().toString())
+                .contains(testData.stream().collect(joining("\",\"", "\"", "\"")));
 
         // Verify rest of the flow
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("1")));
         commonUtilsMockedStatic.verify(() -> sleepMillis(VERIFICATION_DELAY_MILLIS));
-        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(2));
+        commonUtilsMockedStatic.verify(CommonUtils::captureScreen, times(1));
         verify(mockModel).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), eq("verification execution"));
     }
 
@@ -281,18 +280,18 @@ class AgentTest {
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(FAILED);
-        assertThat(result.getStepResults()).hasSize(1);
-        TestStepResult stepResult = result.getStepResults().getFirst();
-        assertThat(stepResult.isSuccessful()).isFalse();
-        assertThat(stepResult.getErrorMessage()).isEqualTo("Verifying that '%s' failed. %s".formatted(verification, failMsg));
-        assertThat(stepResult.getScreenshot()).isNotNull();
-        assertThat(stepResult.getExecutionStartTimestamp()).isNotNull();
-        assertThat(stepResult.getExecutionEndTimestamp()).isNotNull();
+        assertThat(result.testExecutionStatus()).isEqualTo(FAILED);
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        assertThat(stepResult.errorMessage()).isEqualTo("Verification failed. %s".formatted(failMsg));
+        assertThat(stepResult.screenshot()).isNotNull();
+        assertThat(stepResult.executionStartTimestamp()).isNotNull();
+        assertThat(stepResult.executionEndTimestamp()).isNotNull();
 
-        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
+        verify(mockModel).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), eq(TEST_CASE_EXECUTION_PLAN_GENERATION));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)));
-        verify(mockModel, atLeast(2)).generateAndGetResponseAsObject(
+        verify(mockModel, atLeast(1)).generateAndGetResponseAsObject(
                 any(VerificationExecutionPrompt.class), eq("verification execution"));
     }
 
@@ -307,24 +306,26 @@ class AgentTest {
         String failMsg = "Permanent tool failure";
         commonToolsMockedStatic.when(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)))
                 .thenReturn(new ToolExecutionResult(ERROR, failMsg, false));
+        ArgumentCaptor<Map<String, String>> errorDetailsCaptor = ArgumentCaptor.forClass(Map.class);
+        commonUtilsMockedStatic.when(() -> getObjectPrettyPrinted(any(), errorDetailsCaptor.capture())).thenReturn(of(failMsg));
 
         // When
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
-        assertThat(result.getStepResults()).hasSize(1);
-        TestStepResult stepResult = result.getStepResults().getFirst();
-        assertThat(stepResult.isSuccessful()).isFalse();
-        assertThat(stepResult.getErrorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s"
-                .formatted(action, failMsg));
-        assertThat(stepResult.getScreenshot()).isNotNull();
-        assertThat(stepResult.getExecutionStartTimestamp()).isNotNull();
-        assertThat(stepResult.getExecutionEndTimestamp()).isNotNull();
+        assertThat(result.testExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        assertThat(stepResult.errorMessage()).isEqualTo(format("Failure while executing action '%s'. Root cause: %s", action, failMsg));
+        assertThat(stepResult.screenshot()).isNotNull();
+        assertThat(stepResult.executionStartTimestamp()).isNotNull();
+        assertThat(stepResult.executionEndTimestamp()).isNotNull();
+        assertThat(errorDetailsCaptor.getValue()).containsExactly(Map.entry(MOCK_TOOL_NAME, failMsg));
 
-        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
+        verify(mockModel).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), eq(TEST_CASE_EXECUTION_PLAN_GENERATION));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS)));
-        verify(mockModel, never()).generateAndGetResponseAsObject(any(), any());
+        verify(mockModel, never()).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), anyString());
     }
 
     @Test
@@ -337,24 +338,29 @@ class AgentTest {
         RuntimeException toolException = new RuntimeException("Tool exploded as expected");
         commonToolsMockedStatic.when(() -> waitSeconds(eq("" + TOOL_PARAM_WAIT_AMOUNT_SECONDS))).thenThrow(toolException);
 
+        ArgumentCaptor<Map<String, String>> errorDetailsCaptor = ArgumentCaptor.forClass(Map.class);
+        commonUtilsMockedStatic.when(() -> getObjectPrettyPrinted(any(), errorDetailsCaptor.capture())).thenReturn(of("mocked pretty printed error"));
+
         // When
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
-        assertThat(result.getStepResults()).hasSize(1);
-        TestStepResult stepResult = result.getStepResults().getFirst();
-        assertThat(stepResult.isSuccessful()).isFalse();
-        String expectedCauseMessage = "'%s' tool execution failed because of internal error".formatted(MOCK_TOOL_NAME);
-        assertThat(stepResult.getErrorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s.".formatted(action,
-                expectedCauseMessage));
-        assertThat(stepResult.getScreenshot()).isNotNull();
-        assertThat(stepResult.getExecutionStartTimestamp()).isNotNull();
-        assertThat(stepResult.getExecutionEndTimestamp()).isNotNull();
+        assertThat(result.testExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        assertThat(stepResult.errorMessage()).isEqualTo(format(
+                "Failure while executing action '%s'. Root cause: %s",
+                action, "mocked pretty printed error"));
+        assertThat(stepResult.screenshot()).isNotNull();
+        assertThat(stepResult.executionStartTimestamp()).isNotNull();
+        assertThat(stepResult.executionEndTimestamp()).isNotNull();
+        assertThat(errorDetailsCaptor.getValue()).containsExactly(
+                Map.entry(MOCK_TOOL_NAME, format("'%s' tool execution failed because of internal error.", MOCK_TOOL_NAME)));
 
-        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
+        verify(mockModel).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), eq(TEST_CASE_EXECUTION_PLAN_GENERATION));
         commonToolsMockedStatic.verify(() -> waitSeconds(eq("1")));
-        verify(mockModel, never()).generateAndGetResponseAsObject(any(), any());
+        verify(mockModel, never()).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), anyString());
     }
 
     @Test
@@ -365,56 +371,66 @@ class AgentTest {
         TestStep step = new TestStep(action, null, "Verify");
         TestCase testCase = new TestCase("Invalid Tool Case", null, List.of(step));
         String invalidToolName = "nonExistentTool";
-        var invalidRequest = ToolExecutionRequest.builder()
-                .id(MOCK_TOOL_ID)
-                .name(invalidToolName)
-                .arguments("{}")
-                .build();
-        when(mockAiMessage.toolExecutionRequests()).thenReturn(List.of(invalidRequest));
+        var invalidRequest = new TestStepExecutionPlan(MOCK_UUID.toString(), invalidToolName, List.of());
+        var testCaseExecutionPlan = new TestCaseExecutionPlan(List.of(invalidRequest));
+        when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString()))
+                .thenReturn(testCaseExecutionPlan);
+
+        ArgumentCaptor<Map<String, String>> errorDetailsCaptor = ArgumentCaptor.forClass(Map.class);
+        commonUtilsMockedStatic.when(() -> getObjectPrettyPrinted(any(), errorDetailsCaptor.capture())).thenReturn(of("mocked pretty printed error"));
 
         // When
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
-        assertThat(result.getStepResults()).hasSize(1);
-        TestStepResult stepResult = result.getStepResults().getFirst();
-        assertThat(stepResult.isSuccessful()).isFalse();
-        String expectedCause = "The requested tool 'nonExistentTool' is not registered, please fix the prompt";
-        assertThat(stepResult.getErrorMessage()).isEqualTo("Failure while executing action '%s'. Root cause: %s"
-                .formatted(action, expectedCause));
-        assertThat(stepResult.getScreenshot()).isNotNull();
-        assertThat(stepResult.getExecutionStartTimestamp()).isNotNull();
-        assertThat(stepResult.getExecutionEndTimestamp()).isNotNull();
+        assertThat(result.testExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+        assertThat(stepResult.success()).isFalse();
+        assertThat(stepResult.errorMessage()).isEqualTo(format(
+                "Failure while executing action '%s'. Root cause: %s",
+                action, "mocked pretty printed error"));
+        assertThat(stepResult.screenshot()).isNotNull();
+        assertThat(stepResult.executionStartTimestamp()).isNotNull();
+        assertThat(stepResult.executionEndTimestamp()).isNotNull();
+        assertThat(errorDetailsCaptor.getValue()).containsExactly(
+                Map.entry(invalidToolName, format("The requested tool '%s' is not registered, please fix the prompt", invalidToolName)));
 
-        verify(mockModel).generate(any(ActionExecutionPrompt.class), anyList(), eq("action execution"));
-        verify(mockModel, never()).generateAndGetResponseAsObject(any(), any());
+        verify(mockModel).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), eq(TEST_CASE_EXECUTION_PLAN_GENERATION));
+        verify(mockModel, never()).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), anyString());
     }
 
     @Test
-    @DisplayName("Invalid JSON arguments for tool, should return failed result")
-    void executeTestCaseInvalidJsonArgumentsShouldReturnFailedResult() {
+    @DisplayName("Invalid arguments for tool, should return failed result")
+    void executeTestCaseInvalidArgumentsShouldReturnFailedResult() {
         // Given
         String action = "Invalid Args Action";
         TestStep step = new TestStep(action, null, "Verify");
         TestCase testCase = new TestCase("Invalid Args Case", null, List.of(step));
-        String invalidJson = "this is not json";
-        var invalidArgsRequest = new TestStepExecutionPlan("1", MOCK_TOOL_NAME, List.of(invalidJson));
+        var invalidArgsRequest = new TestStepExecutionPlan(MOCK_UUID.toString(), MOCK_TOOL_NAME, List.of("invalid"));
         var testCaseExecutionPlan = new TestCaseExecutionPlan(List.of(invalidArgsRequest));
-        when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString()))
-                .thenReturn(testCaseExecutionPlan);
+        when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString())).thenReturn(
+                testCaseExecutionPlan);
+        String exceptionMessage = "For input string: \"invalid\"";
+        commonToolsMockedStatic.when(() -> waitSeconds(eq("invalid"))).thenThrow(new IllegalArgumentException(exceptionMessage));
+        ArgumentCaptor<Map<String, String>> errorDetailsCaptor = ArgumentCaptor.forClass(Map.class);
+        commonUtilsMockedStatic.when(() -> getObjectPrettyPrinted(any(), errorDetailsCaptor.capture())).thenReturn(of(exceptionMessage));
 
         // When
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
-        assertThat(result.getStepResults()).hasSize(1);
-        TestStepResult stepResult = result.getStepResults().getFirst();
-        assertThat(stepResult.getErrorMessage()).startsWith("Failure while executing action '%s'. Root cause: ".formatted(action));
-        assertThat(stepResult.getScreenshot()).isNotNull();
-        assertThat(stepResult.getExecutionStartTimestamp()).isNotNull();
-        assertThat(stepResult.getExecutionEndTimestamp()).isNotNull();
+        assertThat(result.testExecutionStatus()).isEqualTo(TestExecutionStatus.ERROR);
+        assertThat(result.stepResults()).hasSize(1);
+        TestStepResult stepResult = result.stepResults().getFirst();
+
+        String failureText = format("Failure while executing action '%s'. Root cause: %s", action, exceptionMessage);
+        assertThat(stepResult.errorMessage()).isEqualTo(failureText);
+        assertThat(stepResult.screenshot()).isNotNull();
+        assertThat(stepResult.executionStartTimestamp()).isNotNull();
+        assertThat(stepResult.executionEndTimestamp()).isNotNull();
+        assertThat(errorDetailsCaptor.getValue()).containsExactly(
+                Map.entry(MOCK_TOOL_NAME, "Invalid arguments for tool '%s': %s".formatted(MOCK_TOOL_NAME, exceptionMessage)));
 
         verify(mockModel).generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString());
         verify(mockModel, never()).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class), anyString());
@@ -428,7 +444,7 @@ class AgentTest {
         TestCase testCase = new TestCase("Verify Retry Success", null, List.of(step));
         String successMsg = "Verification finally OK";
         String failMsg = "Verification not ready";
-        var toolExecutionRequest = new TestStepExecutionPlan("1", MOCK_TOOL_NAME, MOCK_TOOL_ARGS_LIST);
+        var toolExecutionRequest = new TestStepExecutionPlan(MOCK_UUID.toString(), MOCK_TOOL_NAME, MOCK_TOOL_ARGS_LIST);
         var testCaseExecutionPlan = new TestCaseExecutionPlan(List.of(toolExecutionRequest));
         when(mockModel.generateAndGetResponseAsObject(any(TestCaseExecutionPlanPrompt.class), anyString()))
                 .thenReturn(testCaseExecutionPlan);
@@ -442,9 +458,9 @@ class AgentTest {
         TestExecutionResult result = Agent.executeTestCase(testCase);
 
         // Then
-        assertThat(result.getTestExecutionStatus()).isEqualTo(PASSED);
-        assertThat(result.getExecutionStartTimestamp()).isNotNull();
-        assertThat(result.getExecutionEndTimestamp()).isNotNull();
+        assertThat(result.testExecutionStatus()).isEqualTo(PASSED);
+        assertThat(result.executionStartTimestamp()).isNotNull();
+        assertThat(result.executionEndTimestamp()).isNotNull();
         verify(mockModel, times(2)).generateAndGetResponseAsObject(any(VerificationExecutionPrompt.class),
                 eq("verification execution"));
     }

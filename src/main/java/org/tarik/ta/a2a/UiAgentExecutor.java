@@ -31,7 +31,6 @@ import org.tarik.ta.prompts.TestCaseExtractionPrompt;
 import org.tarik.ta.utils.CommonUtils;
 
 
-import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -132,18 +131,18 @@ public record UiAgentExecutor() implements AgentExecutor {
     }
 
     private static void addScreenshots(TestExecutionResult result, List<Part<?>> parts) {
-        result.getStepResults().stream()
-                .filter(r -> r.getScreenshot() != null)
+        result.stepResults().stream()
+                .filter(r -> r.screenshot() != null)
                 .map(r -> new FileWithBytes(
                         "image/png",
-                        "Screenshot for the test step %s".formatted(r.getTestStep().stepDescription()),
-                        convertImageToBase64(r.getScreenshot(), "png"))
+                        "Screenshot for the test step %s".formatted(r.testStep().stepDescription()),
+                        convertImageToBase64(r.screenshot(), "png"))
                 )
                 .map(FilePart::new)
                 .forEach(parts::add);
-        ofNullable(result.getScreenshot()).ifPresent(screenshot ->
+        ofNullable(result.screenshot()).ifPresent(screenshot ->
                 parts.add(new FilePart(new FileWithBytes("image/png",
-                        "General screenshot for the test case %s".formatted(result.getTestCaseName()),
+                        "General screenshot for the test case %s".formatted(result.testCaseName()),
                         convertImageToBase64(screenshot, "png")))));
     }
 

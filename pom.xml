@@ -29,8 +29,8 @@
         <maven.surefire.plugin.version>3.5.3</maven.surefire.plugin.version>
         <mockito.version>5.16.1</mockito.version>
         <slf4j.version>2.0.13</slf4j.version>
-        <javalin.version>6.6.0</javalin.version>
-        <jackson.version>2.18.3</jackson.version>
+        <javalin.version>6.7.0</javalin.version>
+        <jackson.version>2.19.1</jackson.version>
         <guava.version>33.4.8-jre</guava.version>
         <opencv.version>4.10.0-1.5.11</opencv.version>
         <openblas.version>0.3.28-1.5.11</openblas.version>

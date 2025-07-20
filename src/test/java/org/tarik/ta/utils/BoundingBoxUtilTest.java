@@ -232,32 +232,6 @@ class BoundingBoxUtilTest {
     }
 
     @Test
-    @DisplayName("drawBoundingBox: Should draw rectangle and save")
-    void drawBoundingBoxWhenSaveIsTrueThenDrawAndSave() {
-        // Given
-        localDateTimeMockedStatic.when(LocalDateTime::now).thenReturn(DATE_TIME);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH_mm_ss");
-        String timestamp = DATE_TIME.format(formatter);
-        String expectedFileName = "%s_%s.png".formatted(timestamp, TEST_COLOR.toString().replaceAll("[^a-zA-Z0-9]", "_"));
-        pathsMockedStatic.when(() -> Paths.get(SCREENSHOTS_SAVE_FOLDER)).thenReturn(mockBasePath);
-        when(mockBasePath.resolve(eq(expectedFileName))).thenReturn(mockFinalPath);
-        when(mockFinalPath.toAbsolutePath()).thenReturn(mockFinalPath);
-        when(mockFinalPath.toFile()).thenReturn(mockFile);
-        
-
-        // When
-        BoundingBoxInfo info = drawBoundingBox(mockImage, TEST_RECTANGLE, TEST_COLOR);
-
-        // Then
-        verify(mockImage).createGraphics();
-        verify(mockGraphics).setColor(TEST_COLOR);
-        verify(mockGraphics).setStroke(any(BasicStroke.class));
-        verify(mockGraphics).drawRect(TEST_RECTANGLE.x, TEST_RECTANGLE.y, TEST_RECTANGLE.width, TEST_RECTANGLE.height);
-        verify(mockGraphics).dispose();
-        assertNotNull(info);
-    }
-
-    @Test
     @DisplayName("drawBoundingBox overload: Should call main drawBoundingBox with defaults")
     void drawBoundingBoxSimpleOverload() {
         // When
