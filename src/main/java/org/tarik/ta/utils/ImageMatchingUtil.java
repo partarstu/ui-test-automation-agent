@@ -81,10 +81,15 @@ public class ImageMatchingUtil {
     private static boolean initialized = false;
 
     private static boolean initializeOpenCv() {
-        Loader.load(opencv_java.class);
-        ORB = create(ORB_MAX_FEATURES, ORB_SCALE_FACTOR, ORB_N_LEVELS, ORB_EDGE_THRESHOLD, ORB_FIRST_LEVEL, ORB_WTA_K, HARRIS_SCORE,
-                ORB_PATCH_SIZE, ORB_FAST_THRESHOLD);
-        return true;
+        try {
+            Loader.load(opencv_java.class);
+            ORB = create(ORB_MAX_FEATURES, ORB_SCALE_FACTOR, ORB_N_LEVELS, ORB_EDGE_THRESHOLD, ORB_FIRST_LEVEL, ORB_WTA_K, HARRIS_SCORE,
+                    ORB_PATCH_SIZE, ORB_FAST_THRESHOLD);
+            return true;
+        } catch (Throwable t) {
+            LOG.error("Failure while initializing OpenCV.", t);
+            throw t;
+        }
     }
 
     public static List<Rectangle> findMatchingRegionsWithTemplateMatching(BufferedImage wholeScreenshot, BufferedImage elementScreenshot) {

@@ -59,6 +59,7 @@ public class AgentConfig {
     private static final boolean UNATTENDED_MODE = parseBoolean(getProperty("unattended.mode", "UNATTENDED_MODE", "false"));
     private static final String HOST = getRequiredProperty("host", "AGENT_HOST");
     private static final boolean DEBUG_MODE = parseBoolean(getProperty("test.mode", "TEST_MODE", "false"));
+    private static final String SCREENSHOTS_SAVE_FOLDER = getProperty("screenshots.save.folder", "SCREENSHOTS_SAVE_FOLDER", "screens");
 
     // RAG Config
     private static final RagDbProvider VECTOR_DB_PROVIDER = stream(RagDbProvider.values())
@@ -123,6 +124,10 @@ public class AgentConfig {
     }
     public static boolean isDebugMode() {
         return DEBUG_MODE;
+    }
+
+    public static String getScreenshotsSaveFolder() {
+        return SCREENSHOTS_SAVE_FOLDER;
     }
 
     // -----------------------------------------------------

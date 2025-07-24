@@ -1,0 +1,37 @@
+steps:
+# Build the Java application with Maven
+- name: 'maven:3.8.6-openjdk-17'
+  entrypoint: 'mvn'
+  args: ['clean', 'install', '-DskipTests']
+
+# Build the Docker image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/$SERVICE_NAME:$COMMIT_SHA', '-f', 'Dockerfile.cloudrun', '.']
+
+# Push the Docker image to Google Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/$PROJECT_ID/$SERVICE_NAME:$COMMIT_SHA']
+
+# Deploy the image to Google Cloud Run
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    - 'run'
+    - 'deploy'
+    - '$SERVICE_NAME'
+    - '--image=gcr.io/$PROJECT_ID/$SERVICE_NAME:$COMMIT_SHA'
+    - '--region=$REGION'
+    - '--platform=managed'
+    - '--allow-unauthenticated' # Adjust as needed for authentication
+    - '--port=8080' # Ensure this matches the EXPOSE port in your Dockerfile.cloudrun
+  env:
+    - 'PROJECT_ID=$PROJECT_ID'
+    - 'SERVICE_NAME=$SERVICE_NAME'
+    - 'REGION=$REGION'
+
+images:
+  - 'gcr.io/$PROJECT_ID/$SERVICE_NAME:$COMMIT_SHA'
+
+# Substitutions for easy customization
+substitutions:
+  _SERVICE_NAME: 'your-java-app-service-name' # Replace with your desired service name
+  _REGION: 'us-central1' # Replace with your desired region

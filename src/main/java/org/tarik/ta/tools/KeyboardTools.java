@@ -110,22 +110,15 @@ public class KeyboardTools extends AbstractTools {
         }
 
         for (char ch : text.toCharArray()) {
-            try {
-                typeCharacter(ch);
-            } catch (Exception e) {
-                LOG.info("Couldn't type '{}' character using keyboard keys, falling back to copy-paste.", ch);
-                // Fallback option - copy-paste using clipboard
+            if (isAsciiPrintable(ch)) {
                 try {
-                    getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(String.valueOf(ch)), null);
-                    robot.keyPress(VK_CONTROL);
-                    robot.keyPress(VK_V);
-                    robot.keyRelease(VK_CONTROL);
-                    robot.keyRelease(VK_V);
-                } catch (Exception ex) {
-                    String message = "Got error while copy-pasting '%s' character.".formatted(ch);
-                    LOG.error(message, e);
-                    return getFailedToolExecutionResult("Couldn't press the key '%s', original error: %s".formatted(ch, e), true);
+                    typeCharacter(ch);
+                } catch (Exception e) {
+                    LOG.info("Couldn't type '{}' character using keyboard keys, falling back to copy-paste.", ch);
+                    copyPaste(ch);
                 }
+            } else {
+                copyPaste(ch);
             }
         }
         return getSuccessfulResult("Input the following text using keyboard: %s".formatted(text));
@@ -160,15 +153,38 @@ public class KeyboardTools extends AbstractTools {
         sleepMillis(KEYBOARD_ACTION_DELAY_MILLIS);
     }
 
-    private static void typeCharacter(char ch) {
-        int keyCode = getKeyCode(ch).orElseGet(() -> getKeyCode(String.valueOf(ch)));
-        if (isUpperCase(ch)) {
-            robot.keyPress(VK_SHIFT);
+    private static void copyPaste(char ch) {
+        try {
+            getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(String.valueOf(ch)), null);
+            robot.keyPress(VK_CONTROL);
+            robot.keyPress(VK_V);
+            robot.keyRelease(VK_CONTROL);
+            robot.keyRelease(VK_V);
+        } catch (Exception ex) {
+            String message = "Got error while copy-pasting '%s' character.".formatted(ch);
+            LOG.error(message, ex);
+            throw new RuntimeException(ex);
         }
-        robot.keyPress(keyCode);
-        robot.keyRelease(keyCode);
-        if (isUpperCase(ch)) {
-            robot.keyRelease(VK_SHIFT);
+    }
+
+    private static boolean isAsciiPrintable(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    }
+
+    private static void typeCharacter(char ch) {
+        try {
+            int keyCode = getKeyCode(ch).orElseGet(() -> getKeyCode(String.valueOf(ch)));
+            if (isUpperCase(ch)) {
+                robot.keyPress(VK_SHIFT);
+            }
+            robot.keyPress(keyCode);
+            robot.keyRelease(keyCode);
+            if (isUpperCase(ch)) {
+                robot.keyRelease(VK_SHIFT);
+            }
+        } catch (IllegalArgumentException e) {
+            LOG.error("Can't type character '{}' as it can't be mapped to a key code. Trying to fall back to copy-paste", ch);
+            throw e;
         }
     }
 

@@ -23,8 +23,11 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.tarik.ta.dto.UiElementIdentificationResult;
+import org.tarik.ta.tools.ElementLocator;
 
 import javax.swing.*;
 import java.awt.*;
@@ -39,14 +42,16 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment;
+import static java.lang.Thread.currentThread;
 import static java.nio.file.Files.*;
 import static java.time.Instant.now;
 import static java.util.Comparator.comparingInt;
-import static java.util.Optional.empty;
-import static java.util.Optional.of;
+import static java.util.Optional.*;
 import static org.tarik.ta.utils.ImageUtils.toBufferedImage;
 
 public class CommonUtils {
@@ -260,5 +265,18 @@ public class CommonUtils {
         double uiScaleX = tx.getScaleX();
         double uiScaleY = tx.getScaleY();
         return new Point((int) (scaledScreenCoordinates.getX() * uiScaleX), (int) (scaledScreenCoordinates.getY() * uiScaleY));
+    }
+
+    public static Optional<UiElementIdentificationResult> getFutureResult(Future<UiElementIdentificationResult> future,
+                                                                          String resultDescription) {
+        try {
+            return ofNullable(future.get());
+        } catch (InterruptedException | ExecutionException e) {
+            LOG.warn("%s task failed".formatted(resultDescription), e);
+            if (e instanceof InterruptedException) {
+                currentThread().interrupt();
+            }
+            return empty();
+        }
     }
 }

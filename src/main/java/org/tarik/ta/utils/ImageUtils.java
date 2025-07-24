@@ -17,6 +17,8 @@ package org.tarik.ta.utils;
 
 import dev.langchain4j.data.image.Image;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -37,8 +39,11 @@ import static java.time.LocalDateTime.now;
 import static java.time.format.DateTimeFormatter.ofPattern;
 import static javax.imageio.ImageIO.write;
 
+import org.tarik.ta.AgentConfig;
+
 public class ImageUtils {
-    public static final String SCREENSHOTS_SAVE_FOLDER = "screens";
+    private static final String SCREENSHOTS_SAVE_FOLDER = AgentConfig.getScreenshotsSaveFolder();
+    private static final Logger LOG = LoggerFactory.getLogger(ImageUtils.class);
 
     public static Image getImage(String base64Image, String format) {
         return Image.builder()
@@ -100,17 +105,20 @@ public class ImageUtils {
         return new BufferedImage(cm, raster, isAlphaPremultiplied, null);
     }
 
-    public static void saveScreenshot(BufferedImage resultingScreenshot, String postfix) {
+    public static boolean saveScreenshot(BufferedImage resultingScreenshot, String postfix) {
         LocalDateTime now = now();
         DateTimeFormatter formatter = ofPattern("yyyy_MM_dd_HH_mm_ss");
         String timestamp = now.format(formatter);
         var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
                 .resolve("%s_%s.png".formatted(timestamp, postfix)).toAbsolutePath();
         try {
-            createDirectories(filePath);
-            write(resultingScreenshot, "png", filePath.toFile());
+            createDirectories(filePath.getParent());
+            write(resultingScreenshot, "png", filePath.toFile() );
+            return true;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            String message = "Couldn't save screenshot %s.".formatted(filePath);
+            LOG.error(message, e);
+            return false;
         }
     }
 }

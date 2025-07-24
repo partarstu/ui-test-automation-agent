@@ -168,15 +168,6 @@
             </properties>
         </profile>
         <profile>
-            <id>console</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <properties>
-                <main.class>org.tarik.ta.Agent</main.class>
-            </properties>
-        </profile>
-        <profile>
             <id>windows</id>
             <activation>
                 <activeByDefault>true</activeByDefault>

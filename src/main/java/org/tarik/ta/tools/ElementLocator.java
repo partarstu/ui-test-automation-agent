@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tarik.ta.AgentConfig;
 import org.tarik.ta.dto.BoundingBox;
+import org.tarik.ta.dto.UiElementIdentificationResult;
 import org.tarik.ta.exceptions.UserChoseTerminationException;
 import org.tarik.ta.exceptions.UserInterruptedExecutionException;
 import org.tarik.ta.prompts.ElementDescriptionPrompt;
@@ -38,6 +39,8 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -46,23 +49,23 @@ import java.util.stream.Stream;
 
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.Thread.currentThread;
+import static java.util.Collections.max;
+import static java.util.Comparator.comparingDouble;
 import static java.util.Optional.*;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.CompletableFuture.supplyAsync;
+import static java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor;
 import static java.util.function.Function.identity;
-import static java.util.stream.Collectors.joining;
-import static java.util.stream.Collectors.toMap;
+import static java.util.stream.Collectors.*;
+import static java.util.stream.IntStream.range;
 import static java.util.stream.Stream.concat;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static org.tarik.ta.model.ModelFactory.getVisionModel;
+import static org.tarik.ta.utils.CommonUtils.*;
 import static org.tarik.ta.utils.ImageMatchingUtil.findMatchingRegionsWithTemplateMatching;
 import static org.tarik.ta.utils.ImageMatchingUtil.findMatchingRegionsWithORB;
 import static org.tarik.ta.utils.BoundingBoxUtil.*;
-import static org.tarik.ta.utils.CommonUtils.captureScreen;
-import static org.tarik.ta.utils.CommonUtils.getColorByName;
-import static org.tarik.ta.utils.CommonUtils.getColorName;
-import static org.tarik.ta.utils.CommonUtils.getScaledBoundingBox;
-import static org.tarik.ta.utils.CommonUtils.sleepMillis;
 import static org.tarik.ta.utils.ImageUtils.cloneImage;
 import static org.tarik.ta.rag.model.UiElement.Screenshot.fromBufferedImage;
 import static org.tarik.ta.utils.ImageUtils.saveScreenshot;
@@ -91,6 +94,7 @@ public class ElementLocator extends AbstractTools {
             Color.CYAN,
             Color.MAGENTA
     );
+    private static final int MODEL_VOTE_COUNT = 7;
 
     public static Optional<Rectangle> locateElementOnTheScreen(String elementDescription) {
         var retrievedElements = elementRetriever.retrieveUiElements(elementDescription, TOP_N_ELEMENTS_TO_RETRIEVE,
@@ -551,32 +555,73 @@ public class ElementLocator extends AbstractTools {
             saveScreenshot(resultingScreenshot, "model_selection_%s".formatted(matchAlgorithm));
         }
 
+        var successfulIdentificationResults =
+                getValidSuccessfulIdentificationResultsFromModelUsingQuorum(uiElement, resultingScreenshot, boxesWithColors);
+        if (successfulIdentificationResults.size() <= MODEL_VOTE_COUNT / 2) {
+            LOG.warn("Couldn't identify the element '{}' by majority vote. {} successful votes out of {}.",
+                    uiElement.name(), successfulIdentificationResults.size(), MODEL_VOTE_COUNT);
+            return new UiElementLocationResult(true, false, null, uiElement);
+        }
+
+        LOG.info("Model identified the element '{}' by majority vote. {} successful votes out of {}.",
+                uiElement.name(), successfulIdentificationResults.size(), MODEL_VOTE_COUNT);
+        var votesByColor = successfulIdentificationResults.stream()
+                .collect(groupingBy(r -> r.boundingBoxId().toLowerCase(), counting()));
+        var maxVotes = max(votesByColor.values());
+        var winners = votesByColor.entrySet().stream()
+                .filter(entry -> entry.getValue().equals(maxVotes))
+                .map(Map.Entry::getKey)
+                .map(CommonUtils::getColorByName)
+                .toList();
+        if (winners.size() > 1) {
+            LOG.warn("Found multiple winners with {} votes for element '{}': {}. Selecting the one with the largest bounding box area.",
+                    maxVotes, uiElement.name(), winners);
+            return winners.stream()
+                    .map(boxesWithColors::get)
+                    .max(comparingDouble(box -> box.getWidth() * box.getHeight()))
+                    .map(box -> new UiElementLocationResult(true, true, box, uiElement))
+                    .orElseGet(()->new UiElementLocationResult(true, false, null, uiElement));
+        } else {
+            return new UiElementLocationResult(true, true, boxesWithColors.get(winners.getFirst()), uiElement);
+        }
+    }
+
+    @NotNull
+    private static List<UiElementIdentificationResult> getValidSuccessfulIdentificationResultsFromModelUsingQuorum(
+            @NotNull UiElement uiElement,
+            @NotNull BufferedImage resultingScreenshot,
+            @NotNull Map<Color, Rectangle> boxesWithColors) {
+        var validColors = boxesWithColors.keySet().stream().map(CommonUtils::getColorName).toList();
         var prompt = BestMatchingUiElementIdentificationPrompt.builder()
                 .withUiElement(uiElement)
                 .withScreenshot(resultingScreenshot)
-                .withBoundingBoxColors(boxesWithColors.keySet().stream().map(CommonUtils::getColorName).toList())
+                .withBoundingBoxColors(validColors)
                 .build();
-        try (var model = getVisionModel(false)) {
-            var identificationResult = model.generateAndGetResponseAsObject(prompt,
-                    "identifying the best matching UI element");
-            if (identificationResult.success()) {
-                var targetColorName = identificationResult.boundingBoxId().toLowerCase();
-                return boxesWithColors.entrySet().stream()
-                        .filter(entry -> getColorName(entry.getKey()).equalsIgnoreCase(targetColorName))
-                        .map(Map.Entry::getValue)
-                        .findFirst()
-                        .map(box -> new UiElementLocationResult(true, true, box, uiElement))
-                        .orElseGet(() -> {
-                            LOG.warn("Model returned a non-existing color label '{}' for UI element '{}'. " +
-                                            "The valid values were: {}", targetColorName, uiElement.name(),
-                                    boxesWithColors.keySet().stream().map(CommonUtils::getColorName).toList());
-                            return new UiElementLocationResult(true, false, null, uiElement);
-                        });
-            } else {
-                LOG.info("Model identified no bounding box which correctly marks '{}'", uiElement.name());
-                return new UiElementLocationResult(true, false, null, uiElement);
-            }
+        try (var executor = newVirtualThreadPerTaskExecutor()) {
+            List<Callable<UiElementIdentificationResult>> tasks = range(0, MODEL_VOTE_COUNT)
+                    .mapToObj(i -> getIdentificationResultFromModel(i, prompt))
+                    .toList();
+            List<Future<UiElementIdentificationResult>> futures = executor.invokeAll(tasks);
+            return futures.stream()
+                    .map(future -> getFutureResult(future, "UI element identification by the model"))
+                    .flatMap(Optional::stream)
+                    .filter(r -> r.success() && validColors.contains(r.boundingBoxId()))
+                    .toList();
+        } catch (InterruptedException e) {
+            currentThread().interrupt();
+            LOG.error("Got interrupted while collecting UI element identification results by the model", e);
+            return List.of();
         }
+    }
+
+    private static Callable<UiElementIdentificationResult> getIdentificationResultFromModel(int voteIndex,
+                                                                                            BestMatchingUiElementIdentificationPrompt prompt) {
+        return () -> {
+            try (var model = getVisionModel(false)) {
+                return model.generateAndGetResponseAsObject(prompt,
+                        "identifying the best matching UI element (vote #%d)".formatted(voteIndex));
+            }
+        };
     }
 
     @NotNull
