@@ -42,7 +42,6 @@ import static javax.imageio.ImageIO.write;
 import org.tarik.ta.AgentConfig;
 
 public class ImageUtils {
-    private static final String SCREENSHOTS_SAVE_FOLDER = AgentConfig.getScreenshotsSaveFolder();
     private static final Logger LOG = LoggerFactory.getLogger(ImageUtils.class);
 
     public static Image getImage(String base64Image, String format) {
@@ -109,7 +108,7 @@ public class ImageUtils {
         LocalDateTime now = now();
         DateTimeFormatter formatter = ofPattern("yyyy_MM_dd_HH_mm_ss");
         String timestamp = now.format(formatter);
-        var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
+        var filePath = Paths.get(AgentConfig.getScreenshotsSaveFolder())
                 .resolve("%s_%s.png".formatted(timestamp, postfix)).toAbsolutePath();
         try {
             createDirectories(filePath.getParent());
