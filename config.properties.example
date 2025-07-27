@@ -10,7 +10,7 @@ port=8005
 host=localhost
 
 # Set to 'true' to enable debug mode for testing purposes.
-test.mode=true
+debug.mode=true
 
  #-----------------------------------------------
  # RAG config

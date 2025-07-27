@@ -14,20 +14,19 @@ while [ ! -e /tmp/.X11-unix/X1 ]; do
     echo "ERROR: Timed out after ${MAX_RETRIES} retries. X server did not start." >&2
     exit 1
   fi
-
   RETRY_COUNT=$((RETRY_COUNT + 1))
   sleep 0.5
 done
 
 echo "X server is ready."
 
-echo "Launching Java application as 'headless' user and redirecting output to /home/headless/java_app.log"
+echo "Launching Java application from ${APP_JAR_PATH}"
+# Check if the APP_JAR_PATH is set and the file exists
+if [ -z "${APP_JAR_PATH}" ] || [ ! -f "${APP_JAR_PATH}" ]; then
+  echo "ERROR: APP_JAR_PATH environment variable is not set or the file does not exist at '${APP_JAR_PATH}'." >&2
+  exit 1
+fi
 
-# --- Launch the Java Application with Logging ---
-# We use 'su -c' to run the command as the 'headless' user.
-# This ensures the Java app has the correct permissions to connect to the
-# desktop session and to create the log file in its own home directory.
-cd /tmp
-su -c "java -jar /app/ui_test_java-1.0.0-SNAPSHOT.jar"
+su -c "java -jar ${APP_JAR_PATH}" &
 
 echo "Java application launch command issued."

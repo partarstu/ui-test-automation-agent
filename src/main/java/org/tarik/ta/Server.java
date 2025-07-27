@@ -16,7 +16,6 @@
 package org.tarik.ta;
 
 import org.tarik.ta.a2a.AgentExecutionResource;
-import io.javalin.Javalin;
 import io.javalin.json.JavalinJackson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

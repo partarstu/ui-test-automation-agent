@@ -68,7 +68,7 @@ import static org.tarik.ta.utils.ImageMatchingUtil.findMatchingRegionsWithORB;
 import static org.tarik.ta.utils.BoundingBoxUtil.*;
 import static org.tarik.ta.utils.ImageUtils.cloneImage;
 import static org.tarik.ta.rag.model.UiElement.Screenshot.fromBufferedImage;
-import static org.tarik.ta.utils.ImageUtils.saveScreenshot;
+import static org.tarik.ta.utils.ImageUtils.saveImage;
 
 public class ElementLocator extends AbstractTools {
     private static final Logger LOG = LoggerFactory.getLogger(ElementLocator.class);
@@ -360,7 +360,7 @@ public class ElementLocator extends AbstractTools {
             var visionIdentifiedBoxes = getScaledBoundingBoxes(identifiedByVisionBoundingBoxes, wholeScreenshot);
             var image = cloneImage(wholeScreenshot);
             visionIdentifiedBoxes.forEach(box -> drawBoundingBox(image, box, BOUNDING_BOX_COLOR));
-            saveScreenshot(image, "vision_original");
+            saveImage(image, "vision_original");
         }
 
         if (identifiedByVisionBoundingBoxes.isEmpty() && featureMatchedBoundingBoxes.isEmpty() &&
@@ -552,7 +552,7 @@ public class ElementLocator extends AbstractTools {
         var resultingScreenshot = cloneImage(screenshot);
         drawBoundingBoxes(resultingScreenshot, boxesWithColors);
         if (DEBUG_MODE) {
-            saveScreenshot(resultingScreenshot, "model_selection_%s".formatted(matchAlgorithm));
+            saveImage(resultingScreenshot, "model_selection_%s".formatted(matchAlgorithm));
         }
 
         var successfulIdentificationResults =
@@ -636,7 +636,7 @@ public class ElementLocator extends AbstractTools {
         Map<Color, Rectangle> elementBoundingBoxesByLabel = elementToPlot.boundingBoxes();
         drawBoundingBoxes(resultingScreenshot, elementBoundingBoxesByLabel);
         if (DEBUG_MODE) {
-            saveScreenshot(resultingScreenshot, postfix);
+            saveImage(resultingScreenshot, postfix);
         }
     }
 

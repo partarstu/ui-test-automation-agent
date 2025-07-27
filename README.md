@@ -209,8 +209,8 @@ override properties file settings.**
 **Key Configuration Properties:**
 
 * `unattended.mode` (Env: `UNATTENDED_MODE`): `true` for unattended execution, `false` for attended (trainee) mode. Default: `false`.
-* `test.mode` (Env: `TEST_MODE`): `true` enables test mode, which saves intermediate screenshots (e.g., with bounding boxes drawn) during
-  element location for debugging purposes. `false` disables this. Default: `true`.
+* `debug.mode` (Env: `DEBUG_MODE`): `true` enables debug mode, which saves intermediate screenshots (e.g., with bounding boxes drawn) 
+  during element location for debugging purposes. `false` disables this. Default: `false`.
 * `port` (Env: `PORT`): Port for the server mode. Default: `8005`.
 * `host` (Env: `AGENT_HOST`): Host address for the server mode. Default: `localhost`.
 * `vector.db.provider` (Env: `VECTOR_DB_PROVIDER`): Vector database provider. Default: `chroma`.

@@ -105,7 +105,7 @@ public class ImageUtils {
         return new BufferedImage(cm, raster, isAlphaPremultiplied, null);
     }
 
-    public static boolean saveScreenshot(BufferedImage resultingScreenshot, String postfix) {
+    public static boolean saveImage(BufferedImage resultingScreenshot, String postfix) {
         LocalDateTime now = now();
         DateTimeFormatter formatter = ofPattern("yyyy_MM_dd_HH_mm_ss");
         String timestamp = now.format(formatter);
@@ -114,6 +114,7 @@ public class ImageUtils {
         try {
             createDirectories(filePath.getParent());
             write(resultingScreenshot, "png", filePath.toFile() );
+            LOG.error("Saved image {}", filePath.toAbsolutePath());
             return true;
         } catch (IOException e) {
             String message = "Couldn't save screenshot %s.".formatted(filePath);

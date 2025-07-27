@@ -46,7 +46,6 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static dev.langchain4j.agent.tool.ToolSpecifications.toolSpecificationsFrom;
-import static java.lang.System.exit;
 import static java.time.Instant.now;
 import static java.util.Optional.ofNullable;
 import static java.util.UUID.randomUUID;
@@ -60,7 +59,7 @@ import static org.tarik.ta.model.ModelFactory.getVisionModel;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.ERROR;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.utils.CommonUtils.*;
-import static org.tarik.ta.utils.ImageUtils.saveScreenshot;
+import static org.tarik.ta.utils.ImageUtils.saveImage;
 
 public class Agent {
     private static final Logger LOG = LoggerFactory.getLogger(Agent.class);
@@ -70,32 +69,10 @@ public class Agent {
     protected static final int VERIFICATION_RETRY_TIMEOUT_MILLIS = getVerificationRetryTimeoutMillis();
     protected static final int TEST_STEP_RETRY_INTERVAL_MILLIS = getTestStepExecutionRetryIntervalMillis();
     protected static final int ACTION_VERIFICATION_DELAY_MILLIS = getActionVerificationDelayMillis();
-    private static final boolean DEBUG_MODE = AgentConfig.isDebugMode();
-    private static final int ERROR_STATUS = 1;
+    private static final boolean DEBUG_MODE = isDebugMode();
     private static final String VERIFICATION_EXECUTION = "verification execution";
     private static final String PRECONDITION_VALIDATION = "precondition validation";
     private static final String TEST_CASE_EXECUTION_PLAN = "test case execution plan generation";
-
-    public static void main(String[] args) {
-        if (args.length == 0) {
-            System.err.println("Arguments missing: path to the file which contains JSON");
-            exit(ERROR_STATUS);
-        }
-        String useCaseJsonPath = args[0];
-        deserializeJsonFromFile(useCaseJsonPath, TestCase.class).ifPresentOrElse(testCase -> {
-            LOG.info("Starting Agent execution for test case: {}", testCase.name());
-            TestExecutionResult result = executeTestCase(testCase);
-            LOG.info("Finished Agent execution for test case: {}", testCase.name());
-            System.out.println(result);
-            if (result.testExecutionStatus() != PASSED) {
-                exit(ERROR_STATUS);
-            }
-        }, () -> {
-            var message = "Failed to load test case from: " + useCaseJsonPath;
-            LOG.error(message);
-            exit(ERROR_STATUS);
-        });
-    }
 
     private record TestStepById(String id, TestStep testStep) {
     }
@@ -244,7 +221,7 @@ public class Agent {
         return executeWithRetries(VERIFICATION_RETRY_TIMEOUT_MILLIS, VERIFICATION_EXECUTION, (model) -> {
             var screenshot = captureScreen();
             if (DEBUG_MODE) {
-                saveScreenshot(screenshot, "verification");
+                saveImage(screenshot, "verification");
             }
             var prompt = VerificationExecutionPrompt.builder()
                     .withVerificationDescription(verification)
