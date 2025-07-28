@@ -10,7 +10,7 @@ IMAGE_TAG=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance
 NO_VNC_PORT=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/no-vnc-port" -H "Metadata-Flavor: Google")
 VNC_PORT=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/vnc-port" -H "Metadata-Flavor: Google")
 AGENT_SERVER_PORT=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/agent-server-port" -H "Metadata-Flavor: Google")
-AGENT_CONTAINER_LOG_FOLDER=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/agent-container-log-folder" -H "Metadata-Flavor: Google")
+APP_FINAL_LOG_FOLDER=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/app-final-log-folder" -H "Metadata-Flavor: Google")
 VNC_RESOLUTION=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/VNC_RESOLUTION" -H "Metadata-Flavor: Google")
 LOG_LEVEL=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/LOG_LEVEL" -H "Metadata-Flavor: Google")
 INSTRUCTION_MODEL_NAME=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/INSTRUCTION_MODEL_NAME" -H "Metadata-Flavor: Google")
@@ -19,6 +19,7 @@ MODEL_PROVIDER=$(curl -s "http://metadata.google.internal/computeMetadata/v1/ins
 UNATTENDED_MODE=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/UNATTENDED_MODE" -H "Metadata-Flavor: Google")
 DEBUG_MODE=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/DEBUG_MODE" -H "Metadata-Flavor: Google")
 JAVA_APP_STARTUP_SCRIPT=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/java-app-startup-script" -H "Metadata-Flavor: Google")
+AGENT_INTERNAL_IP=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip" -H "Metadata-Flavor: Google")
 
 # --- Docker Authentication ---
 echo "Configuring Docker to authenticate with Google Container Registry..."
@@ -48,15 +49,18 @@ mkdir -p /var/log/ui-test-automation-agent
 
 # --- Run Docker Container ---
 echo "Removing any existing service containers"
-docker rm ${SERVICE_NAME} >/dev/null 2>&1
+docker rm -f ${SERVICE_NAME} >/dev/null 2>&1 || true
 
 echo "Pulling and running the Docker container..."
-docker run -d --rm --name ${SERVICE_NAME} \
+docker run -d --rm --name ${SERVICE_NAME} --shm-size=4g \
     -p ${NO_VNC_PORT}:${NO_VNC_PORT} \
     -p ${VNC_PORT}:${VNC_PORT} \
     -p ${AGENT_SERVER_PORT}:${AGENT_SERVER_PORT} \
-    -v /var/log/ui-test-automation-agent:${AGENT_CONTAINER_LOG_FOLDER} \
+    -v /var/log/ui-test-automation-agent:/app/log \
     -e GROQ_API_KEY="${GROQ_API_KEY}" \
+    -e PORT="${AGENT_SERVER_PORT}" \
+    -e AGENT_HOST="0.0.0.0" \
+    -e EXTERNAL_URL="http://${AGENT_INTERNAL_IP}:${AGENT_SERVER_PORT}" \
     -e GROQ_ENDPOINT="${GROQ_ENDPOINT}" \
     -e VECTOR_DB_URL="${VECTOR_DB_URL}" \
     -e VNC_PW="${VNC_PW}" \

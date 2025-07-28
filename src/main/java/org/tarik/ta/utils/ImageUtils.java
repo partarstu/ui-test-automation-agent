@@ -113,7 +113,7 @@ public class ImageUtils {
         try {
             createDirectories(filePath.getParent());
             write(resultingScreenshot, "png", filePath.toFile() );
-            LOG.error("Saved image {}", filePath.toAbsolutePath());
+            LOG.info("Saved image {}", filePath.toAbsolutePath());
             return true;
         } catch (IOException e) {
             String message = "Couldn't save screenshot %s.".formatted(filePath);

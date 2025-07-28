@@ -1,4 +1,3 @@
-target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -29,3 +28,7 @@ dependency-reduced-pom.xml
 ManualTest.java
 GEMINI.md
 config.properties.example
+flow_diagram.puml
+CONTRIBUTING.md
+code_style
+.github

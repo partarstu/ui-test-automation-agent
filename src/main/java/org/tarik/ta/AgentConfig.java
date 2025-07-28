@@ -61,47 +61,66 @@ public class AgentConfig {
 
     // Main Config
     private static final ConfigProperty<Integer> START_PORT = loadPropertyAsInteger("port", "PORT", "7070", false);
-    private static final ConfigProperty<Boolean> UNATTENDED_MODE = loadProperty("unattended.mode", "UNATTENDED_MODE", "false", Boolean::parseBoolean, false);
+    private static final ConfigProperty<Boolean> UNATTENDED_MODE =
+            loadProperty("unattended.mode", "UNATTENDED_MODE", "false", Boolean::parseBoolean, false);
     private static final ConfigProperty<String> HOST = getRequiredProperty("host", "AGENT_HOST", false);
-    private static final ConfigProperty<Boolean> DEBUG_MODE = loadProperty("debug.mode", "DEBUG_MODE", "false", Boolean::parseBoolean, false);
-    private static final ConfigProperty<String> SCREENSHOTS_SAVE_FOLDER = loadProperty("screenshots.save.folder", "SCREENSHOTS_SAVE_FOLDER", "screens", s -> s, false);
+    private static final ConfigProperty<String> EXTERNAL_URL = loadProperty("external.url", "EXTERNAL_URL",
+            "http://localhost:%s".formatted(START_PORT.value()), s -> s, false);
+    private static final ConfigProperty<Boolean> DEBUG_MODE =
+            loadProperty("debug.mode", "DEBUG_MODE", "false", Boolean::parseBoolean, false);
+    private static final ConfigProperty<String> SCREENSHOTS_SAVE_FOLDER =
+            loadProperty("screenshots.save.folder", "SCREENSHOTS_SAVE_FOLDER", "screens", s -> s, false);
 
     // RAG Config
-    private static final ConfigProperty<RagDbProvider> VECTOR_DB_PROVIDER = getProperty("vector.db.provider", "VECTOR_DB_PROVIDER", "chroma", s -> stream(RagDbProvider.values())
-            .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(s))
-            .findAny()
-            .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported RAG DB provider. Supported ones: %s".formatted(s, Arrays.toString(RagDbProvider.values()))))), false);
+    private static final ConfigProperty<RagDbProvider> VECTOR_DB_PROVIDER =
+            getProperty("vector.db.provider", "VECTOR_DB_PROVIDER", "chroma", s -> stream(RagDbProvider.values())
+                    .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(s))
+                    .findAny()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            ("%s is not a supported RAG DB provider. Supported ones: %s".formatted(s,
+                                    Arrays.toString(RagDbProvider.values()))))), false);
     private static final ConfigProperty<String> VECTOR_DB_URL = getRequiredProperty("vector.db.url", "VECTOR_DB_URL", false);
     private static final ConfigProperty<Integer> RETRIEVER_TOP_N = loadPropertyAsInteger("retriever.top.n", "RETRIEVER_TOP_N", "3", false);
 
     // Model Config
-    private static final ConfigProperty<ModelProvider> MODEL_PROVIDER = getProperty("model.provider", "MODEL_PROVIDER", "google", s -> stream(ModelProvider.values())
-            .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(s))
-            .findAny()
-            .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported model provider. Supported ones: %s".formatted(s, Arrays.toString(ModelProvider.values()))))), false);
+    private static final ConfigProperty<ModelProvider> MODEL_PROVIDER =
+            getProperty("model.provider", "MODEL_PROVIDER", "google", s -> stream(ModelProvider.values())
+                    .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(s))
+                    .findAny()
+                    .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported model provider. Supported ones: %s".formatted(s,
+                            Arrays.toString(ModelProvider.values()))))), false);
     private static final ConfigProperty<String> INSTRUCTION_MODEL_NAME =
             loadProperty("instruction.model.name", "INSTRUCTION_MODEL_NAME", "gemini-2.0-flash", s -> s, false);
-    private static final ConfigProperty<String> VISION_MODEL_NAME = loadProperty("vision.model.name", "VISION_MODEL_NAME", "gemini-2.5-pro-exp-03-25", s -> s, false);
-    private static final ConfigProperty<Integer> MAX_OUTPUT_TOKENS = loadPropertyAsInteger("model.max.output.tokens", "MAX_OUTPUT_TOKENS", "5000", false);
+    private static final ConfigProperty<String> VISION_MODEL_NAME =
+            loadProperty("vision.model.name", "VISION_MODEL_NAME", "gemini-2.5-pro-exp-03-25", s -> s, false);
+    private static final ConfigProperty<Integer> MAX_OUTPUT_TOKENS =
+            loadPropertyAsInteger("model.max.output.tokens", "MAX_OUTPUT_TOKENS", "5000", false);
     private static final ConfigProperty<Double> TEMPERATURE = loadPropertyAsDouble("model.temperature", "TEMPERATURE", "0.0", false);
     private static final ConfigProperty<Double> TOP_P = loadPropertyAsDouble("model.top.p", "TOP_P", "1.0", false);
-    private static final ConfigProperty<Boolean> MODEL_LOGGING_ENABLED = loadProperty("model.logging.enabled", "LOG_MODEL_OUTPUT", "false", Boolean::parseBoolean, false);
-    private static final ConfigProperty<Boolean> THINKING_OUTPUT_ENABLED = loadProperty("thinking.output.enabled", "OUTPUT_THINKING", "false", Boolean::parseBoolean, false);
-    private static final ConfigProperty<Integer> GEMINI_THINKING_BUDGET = loadPropertyAsInteger("gemini.thinking.budget", "GEMINI_THINKING_BUDGET", "5000", false);
+    private static final ConfigProperty<Boolean> MODEL_LOGGING_ENABLED =
+            loadProperty("model.logging.enabled", "LOG_MODEL_OUTPUT", "false", Boolean::parseBoolean, false);
+    private static final ConfigProperty<Boolean> THINKING_OUTPUT_ENABLED =
+            loadProperty("thinking.output.enabled", "OUTPUT_THINKING", "false", Boolean::parseBoolean, false);
+    private static final ConfigProperty<Integer> GEMINI_THINKING_BUDGET =
+            loadPropertyAsInteger("gemini.thinking.budget", "GEMINI_THINKING_BUDGET", "5000", false);
     private static final ConfigProperty<Integer> MAX_RETRIES = loadPropertyAsInteger("model.max.retries", "MAX_RETRIES", "10", false);
 
     // Google API Config (Only relevant if model.provider is Google)
-    private static final ConfigProperty<GoogleApiProvider> GOOGLE_API_PROVIDER = getProperty("google.api.provider", "GOOGLE_API_PROVIDER", "studio_ai", s -> stream(GoogleApiProvider.values())
-            .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(s))
-            .findAny()
-            .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported Google API provider. Supported ones: %s".formatted(s, Arrays.toString(GoogleApiProvider.values()))))), false);
+    private static final ConfigProperty<GoogleApiProvider> GOOGLE_API_PROVIDER =
+            getProperty("google.api.provider", "GOOGLE_API_PROVIDER", "studio_ai", s -> stream(GoogleApiProvider.values())
+                    .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(s))
+                    .findAny()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            ("%s is not a supported Google API provider. Supported ones: %s".formatted(s,
+                                    Arrays.toString(GoogleApiProvider.values()))))), false);
     private static final ConfigProperty<String> GOOGLE_API_TOKEN = getRequiredProperty("google.api.token", "GOOGLE_AI_TOKEN", true);
     private static final ConfigProperty<String> GOOGLE_PROJECT = getRequiredProperty("google.project", "GOOGLE_PROJECT", false);
     private static final ConfigProperty<String> GOOGLE_LOCATION = getRequiredProperty("google.location", "GOOGLE_LOCATION", false);
 
     // OpenAI API Config
     private static final ConfigProperty<String> OPENAI_API_KEY = getRequiredProperty("azure.openai.api.key", "OPENAI_API_KEY", true);
-    private static final ConfigProperty<String> OPENAI_API_ENDPOINT = getRequiredProperty("azure.openai.endpoint", "OPENAI_API_ENDPOINT", false);
+    private static final ConfigProperty<String> OPENAI_API_ENDPOINT =
+            getRequiredProperty("azure.openai.endpoint", "OPENAI_API_ENDPOINT", false);
 
     // Groq API Config
     private static final ConfigProperty<String> GROQ_API_KEY = getRequiredProperty("groq.api.key", "GROQ_API_KEY", true);
@@ -129,6 +148,10 @@ public class AgentConfig {
 
     public static String getHost() {
         return HOST.value();
+    }
+
+    public static String getExternalUrl() {
+        return EXTERNAL_URL.value();
     }
 
     public static boolean isDebugMode() {
@@ -253,7 +276,8 @@ public class AgentConfig {
 
     // -----------------------------------------------------
     // Element Config
-    private static final ConfigProperty<String> ELEMENT_BOUNDING_BOX_COLOR_NAME = getRequiredProperty("element.bounding.box.color", "BOUNDING_BOX_COLOR", false);
+    private static final ConfigProperty<String> ELEMENT_BOUNDING_BOX_COLOR_NAME =
+            getRequiredProperty("element.bounding.box.color", "BOUNDING_BOX_COLOR", false);
 
     public static String getElementBoundingBoxColorName() {
         return ELEMENT_BOUNDING_BOX_COLOR_NAME.value();
@@ -287,9 +311,10 @@ public class AgentConfig {
         return ELEMENT_LOCATOR_VISUAL_SIMILARITY_THRESHOLD.value();
     }
 
-    private static final ConfigProperty<Integer> ELEMENT_LOCATOR_TOP_VISUAL_MATCHES = loadPropertyAsInteger("element.locator.top.visual.matches",
-            "TOP_VISUAL_MATCHES_TO_FIND",
-            "3", false);
+    private static final ConfigProperty<Integer> ELEMENT_LOCATOR_TOP_VISUAL_MATCHES =
+            loadPropertyAsInteger("element.locator.top.visual.matches",
+                    "TOP_VISUAL_MATCHES_TO_FIND",
+                    "3", false);
 
     public static int getElementLocatorTopVisualMatches() {
         return ELEMENT_LOCATOR_TOP_VISUAL_MATCHES.value();
@@ -325,7 +350,8 @@ public class AgentConfig {
         return DIALOG_DEFAULT_VERTICAL_GAP.value();
     }
 
-    private static final ConfigProperty<String> DIALOG_DEFAULT_FONT_TYPE = getProperty("dialog.default.font.type", "DIALOG_DEFAULT_FONT_TYPE", "Dialog", s -> s, false);
+    private static final ConfigProperty<String> DIALOG_DEFAULT_FONT_TYPE =
+            getProperty("dialog.default.font.type", "DIALOG_DEFAULT_FONT_TYPE", "Dialog", s -> s, false);
 
     public static String getDialogDefaultFontType() {
         return DIALOG_DEFAULT_FONT_TYPE.value();
@@ -338,7 +364,8 @@ public class AgentConfig {
         return DIALOG_USER_INTERACTION_CHECK_INTERVAL_MILLIS.value();
     }
 
-    private static final ConfigProperty<Integer> DIALOG_DEFAULT_FONT_SIZE = loadPropertyAsInteger("dialog.default.font.size", "DIALOG_DEFAULT_FONT_SIZE", "13", false);
+    private static final ConfigProperty<Integer> DIALOG_DEFAULT_FONT_SIZE =
+            loadPropertyAsInteger("dialog.default.font.size", "DIALOG_DEFAULT_FONT_SIZE", "13", false);
 
     public static int getDialogDefaultFontSize() {
         return DIALOG_DEFAULT_FONT_SIZE.value();
@@ -362,7 +389,8 @@ public class AgentConfig {
         }
     }
 
-    private static <T> ConfigProperty<T> loadProperty(String key, String envVar, String defaultValue, Function<String, T> converter, boolean isSecret) {
+    private static <T> ConfigProperty<T> loadProperty(String key, String envVar, String defaultValue, Function<String, T> converter,
+                                                      boolean isSecret) {
         var value = getProperty(key, envVar, defaultValue, isSecret);
         return new ConfigProperty<>(converter.apply(value), isSecret);
     }
@@ -403,14 +431,16 @@ public class AgentConfig {
         });
     }
 
-    private static <T> ConfigProperty<T> getProperty(String key, String envVar, String defaultValue, Function<String, T> converter, boolean isSecret) {
+    private static <T> ConfigProperty<T> getProperty(String key, String envVar, String defaultValue, Function<String, T> converter,
+                                                     boolean isSecret) {
         String value = getProperty(key, envVar, defaultValue, isSecret);
         return new ConfigProperty<>(converter.apply(value), isSecret);
     }
 
     private static ConfigProperty<String> getRequiredProperty(String key, String envVar, boolean isSecret) {
-        String value = getProperty(key, envVar, isSecret).orElseThrow(() -> new IllegalStateException(("The value of required property '%s' must be either " +
-                "present in the properties file, or in the environment variable '%s'").formatted(key, envVar)));
+        String value = getProperty(key, envVar, isSecret).orElseThrow(
+                () -> new IllegalStateException(("The value of required property '%s' must be either " +
+                        "present in the properties file, or in the environment variable '%s'").formatted(key, envVar)));
         return new ConfigProperty<>(value, isSecret);
     }
 

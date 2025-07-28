@@ -22,7 +22,7 @@ import io.a2a.spec.AgentCard;
  import java.util.List;
 
 public class CardProducer {
-    private static final String AGENT_URL = String.format("http://%s:%d", AgentConfig.getHost(), AgentConfig.getStartPort());
+    private static final String AGENT_URL = AgentConfig.getExternalUrl();
 
     public static AgentCard agentCard() {
         return new AgentCard.Builder()

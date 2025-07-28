@@ -22,16 +22,18 @@ import org.slf4j.LoggerFactory;
 
 import static io.javalin.Javalin.create;
 import static org.tarik.ta.AgentConfig.getStartPort;
+import static org.tarik.ta.AgentConfig.isUnattendedMode;
 
 public class Server {
     private static final Logger LOG = LoggerFactory.getLogger(Server.class);
     private static final long MAX_REQUEST_SIZE = 10000000;
     private static final String MAIN_PATH = "/";
     private static final String AGENT_CARD_PATH = "/.well-known/agent.json";
-    private static final boolean UNATTENDED_MODE = AgentConfig.isUnattendedMode();
+    private static final boolean UNATTENDED_MODE = isUnattendedMode();
 
     public static void main(String[] args) {
         int port = getStartPort();
+        String host = AgentConfig.getHost();
         AgentExecutionResource agentExecutionResource = new AgentExecutionResource();
 
         create(config -> {
@@ -40,8 +42,8 @@ public class Server {
         })
                 .post(MAIN_PATH, ctx -> ctx.result(agentExecutionResource.handleNonStreamingRequests(ctx)))
                 .get(AGENT_CARD_PATH, agentExecutionResource::getAgentCard)
-                .start(port);
+                .start(host, port);
 
-        LOG.info("Agent server started on port: {} in {} mode", port, UNATTENDED_MODE ? "unattended" : "attended");
+        LOG.info("Agent server started on host {} and port {} in {} mode", host, port, UNATTENDED_MODE ? "unattended" : "attended");
     }
 }

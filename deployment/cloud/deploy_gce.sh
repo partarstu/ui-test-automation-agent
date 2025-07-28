@@ -25,8 +25,8 @@ export SERVICE_NAME="${SERVICE_NAME:-ui-test-execution-agent}"
 export IMAGE_TAG="${IMAGE_TAG:-latest}"
 export NO_VNC_PORT="${NO_VNC_PORT:-6901}"
 export VNC_PORT="${VNC_PORT:-5901}"
-export AGENT_SERVER_PORT="${AGENT_SERVER_PORT:-8005}"
-export AGENT_CONTAINER_LOG_FOLDER="${AGENT_CONTAINER_LOG_FOLDER:-/app/log}"
+export AGENT_SERVER_PORT="${AGENT_SERVER_PORT:-443}"
+export APP_LOG_FINAL_FOLDER="/app/log"
 export VNC_RESOLUTION="${VNC_RESOLUTION:-1920x1080}"
 export LOG_LEVEL="${LOG_LEVEL:-INFO}"
 export INSTRUCTION_MODEL_NAME="${INSTRUCTION_MODEL_NAME:-meta-llama/llama-4-maverick-17b-128e-instruct}"
@@ -107,7 +107,7 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --role="roles/secretmanager.secretAccessor"
 
 # Create new instance
-gcloud compute instances create ${INSTANCE_NAME} \
+gcloud beta compute instances create ${INSTANCE_NAME} \
     --project=${PROJECT_ID} \
     --zone=${ZONE} \
     --machine-type=${MACHINE_TYPE} \
@@ -120,8 +120,10 @@ gcloud compute instances create ${INSTANCE_NAME} \
     --boot-disk-size=50GB \
     --boot-disk-type=pd-balanced \
     --boot-disk-device-name=${INSTANCE_NAME} \
+    --graceful-shutdown \
+    --graceful-shutdown-max-duration=1m \
     --metadata-from-file=startup-script=gce_startup_script.sh \
-    --metadata=gcp-project-id=${PROJECT_ID},gcp-service-name=${SERVICE_NAME},gcp-image-tag=${IMAGE_TAG},no-vnc-port=${NO_VNC_PORT},vnc-port=${VNC_PORT},agent-server-port=${AGENT_SERVER_PORT},agent-container-log-folder=${AGENT_CONTAINER_LOG_FOLDER},VNC_RESOLUTION=${VNC_RESOLUTION},LOG_LEVEL=${LOG_LEVEL},INSTRUCTION_MODEL_NAME=${INSTRUCTION_MODEL_NAME},VISION_MODEL_NAME=${VISION_MODEL_NAME},MODEL_PROVIDER=${MODEL_PROVIDER},UNATTENDED_MODE=${UNATTENDED_MODE},DEBUG_MODE=${DEBUG_MODE},java-app-startup-script=${JAVA_APP_STARTUP_SCRIPT} \
+    --metadata=gcp-project-id=${PROJECT_ID},gcp-service-name=${SERVICE_NAME},gcp-image-tag=${IMAGE_TAG},no-vnc-port=${NO_VNC_PORT},vnc-port=${VNC_PORT},agent-server-port=${AGENT_SERVER_PORT},app-final-log-folder=${APP_LOG_FINAL_FOLDER},VNC_RESOLUTION=${VNC_RESOLUTION},LOG_LEVEL=${LOG_LEVEL},INSTRUCTION_MODEL_NAME=${INSTRUCTION_MODEL_NAME},VISION_MODEL_NAME=${VISION_MODEL_NAME},MODEL_PROVIDER=${MODEL_PROVIDER},UNATTENDED_MODE=${UNATTENDED_MODE},DEBUG_MODE=${DEBUG_MODE},java-app-startup-script=${JAVA_APP_STARTUP_SCRIPT} \
     --labels=container-vm=cos-121-18867-90-97
 
 echo "--- Deployment Summary ---"
