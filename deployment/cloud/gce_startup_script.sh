@@ -57,6 +57,7 @@ docker run -d --rm --name ${SERVICE_NAME} --shm-size=4g \
     -p ${VNC_PORT}:${VNC_PORT} \
     -p ${AGENT_SERVER_PORT}:${AGENT_SERVER_PORT} \
     -v /var/log/ui-test-automation-agent:/app/log \
+    -e NO_VNC_PORT="${NO_VNC_PORT}" \
     -e GROQ_API_KEY="${GROQ_API_KEY}" \
     -e PORT="${AGENT_SERVER_PORT}" \
     -e AGENT_HOST="0.0.0.0" \

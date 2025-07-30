@@ -8,8 +8,6 @@ ARG SOURCE_JAR_PATH=target/ui_test_java-1.0.0-SNAPSHOT.jar
 ARG DESTINATION_JAR_PATH=${APP_DIR}/app.jar
 ARG SOURCE_START_SCRIPT=deployment/java_app_startup.sh
 ARG DESTINATION_START_SCRIPT=${APP_DIR}/java_app_startup.sh
-ARG SOURCE_START_WEBSOCKIFY_SSL_SCRIPT=deployment/cloud/start_websockify_ssl.sh
-ARG DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT=${APP_DIR}/start_websockify_ssl.sh
 ARG JAVA_VERSION=24
 
 # Switch to root user to install software
@@ -29,21 +27,6 @@ RUN update-alternatives --list java
 RUN apt-get install --reinstall libgtk2.0-0 -y
 RUN apt-get clean
 
-# --- SSL Certificate Generation for noVNC ---
-# Install openssl for certificate generation
-RUN apt-get update && apt-get install -y openssl lsof
-
-# Create a directory for SSL certificates
-RUN mkdir -p /etc/ssl/novnc
-
-# Generate a self-signed certificate and key
-# For production, you should use a proper CA-signed certificate
-RUN openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/ssl/novnc/novnc.key -out /etc/ssl/novnc/novnc.crt -days 365 -subj "/CN=novnc"
-
-# Copy the custom websockify startup script
-COPY ${SOURCE_START_WEBSOCKIFY_SSL_SCRIPT} ${DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT}
-RUN chmod +x ${DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT}
-
 # --- Application Setup ---
 # Copy your Java application JAR file into the container.
 # We'll place it in the app directory.
@@ -55,12 +38,19 @@ RUN chmod 777 -R ${APP_LOG_DIR}
 COPY ${SOURCE_START_SCRIPT} ${DESTINATION_START_SCRIPT}
 RUN chmod 777 ${DESTINATION_START_SCRIPT}
 
-COPY ${SOURCE_START_WEBSOCKIFY_SSL_SCRIPT} ${DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT}
-RUN chmod 777 ${DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT}
-
-# --- Environment Variables ---
+# --- Environment Variables (Optional) ---
 ENV APP_JAR_PATH=${DESTINATION_JAR_PATH}
 ENV DISPLAY=:1
+ENV GROQ_API_KEY=""
+ENV GROQ_ENDPOINT="https://api.groq.com/openai/v1"
+ENV INSTRUCTION_MODEL_NAME="meta-llama/llama-4-maverick-17b-128e-instruct"
+ENV LOG_LEVEL="INFO"
+ENV logging.level.dev.langchain4j="INFO"
+ENV MODEL_PROVIDER="groq"
+ENV UNATTENDED_MODE="false"
+ENV VISION_MODEL_NAME="meta-llama/llama-4-maverick-17b-128e-instruct"
+ENV VECTOR_DB_URL=""
 ENV SCREENSHOTS_SAVE_FOLDER="${APP_DIR}/screenshots"
 ENV LOG_DIR=${APP_LOG_DIR}
-ENV DEPLOYMENT_ENV="cloud"
+ENV DEBUG_MODE="true"
+ENV DEPLOYMENT_ENV="local"

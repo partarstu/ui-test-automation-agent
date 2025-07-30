@@ -65,8 +65,8 @@ else
 fi
 
 if ! gcloud compute firewall-rules describe allow-novnc --project=${PROJECT_ID} &>/dev/null; then
-    echo "Creating firewall rule 'allow-novnc'..."
-    gcloud compute firewall-rules create allow-novnc --network=${NETWORK_NAME} --allow=tcp:6901 --source-ranges=0.0.0.0/0 --project=${PROJECT_ID}
+    echo "Creating firewall rule 'allow-novnc' for port ${NO_VNC_PORT}..."
+    gcloud compute firewall-rules create allow-novnc --network=${NETWORK_NAME} --allow=tcp:${NO_VNC_PORT} --source-ranges=0.0.0.0/0 --project=${PROJECT_ID}
 else
     echo "Firewall rule 'allow-novnc' already exists."
 fi
@@ -113,7 +113,7 @@ gcloud beta compute instances create ${INSTANCE_NAME} \
     --machine-type=${MACHINE_TYPE} \
     --network-interface=network-tier=STANDARD,subnet=${NETWORK_NAME} \
     --provisioning-model=SPOT \
-    --instance-termination-action=DELETE \
+    --instance-termination-action=STOP \
     --service-account=$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')-compute@developer.gserviceaccount.com \
     --scopes=https://www.googleapis.com/auth/cloud-platform \
     --image=projects/cos-cloud/global/images/cos-121-18867-90-97 \
@@ -126,7 +126,19 @@ gcloud beta compute instances create ${INSTANCE_NAME} \
     --metadata=gcp-project-id=${PROJECT_ID},gcp-service-name=${SERVICE_NAME},gcp-image-tag=${IMAGE_TAG},no-vnc-port=${NO_VNC_PORT},vnc-port=${VNC_PORT},agent-server-port=${AGENT_SERVER_PORT},app-final-log-folder=${APP_LOG_FINAL_FOLDER},VNC_RESOLUTION=${VNC_RESOLUTION},LOG_LEVEL=${LOG_LEVEL},INSTRUCTION_MODEL_NAME=${INSTRUCTION_MODEL_NAME},VISION_MODEL_NAME=${VISION_MODEL_NAME},MODEL_PROVIDER=${MODEL_PROVIDER},UNATTENDED_MODE=${UNATTENDED_MODE},DEBUG_MODE=${DEBUG_MODE},java-app-startup-script=${JAVA_APP_STARTUP_SCRIPT} \
     --labels=container-vm=cos-121-18867-90-97
 
+echo "Waiting for instance ${INSTANCE_NAME} to be running..."
+while [[ $(gcloud compute instances describe ${INSTANCE_NAME} --zone=${ZONE} --project=${PROJECT_ID} --format='value(status)') != "RUNNING" ]]; do
+  echo -n "."
+  sleep 5
+done
+echo "Instance is running."
+
+echo "Fetching instance details..."
+EXTERNAL_IP=$(gcloud compute instances describe ${INSTANCE_NAME} --zone=${ZONE} --project=${PROJECT_ID} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+
 echo "--- Deployment Summary ---"
-echo "GCE Instance '${INSTANCE_NAME}' is being created."
-echo "To access the VNC, get the external IP address from the GCP console and connect to http://<EXTERNAL_IP>:${NO_VNC_PORT}"
-echo "It may take a few minutes for the VM to start and the container to launch."
+echo "Agent VM '${INSTANCE_NAME}' created."
+echo "Agent is running on ${AGENT_SERVER_PORT} port."
+echo "In order to get the internal Agent host name, execute the following command inside the VM: 'curl \"http://metadata.google.internal/computeMetadata/v1/instance/hostname\" -H \"Metadata-Flavor: Google\"'"
+echo "To access the Agent via noVNC, connect to https://${EXTERNAL_IP}:${NO_VNC_PORT}"
+echo "It may take a few minutes for the VM to start and agent to be available."

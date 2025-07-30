@@ -299,6 +299,213 @@ Starts a web server that listens for test case execution requests.
 5. The server will respond immediately with `200 OK` if it accepts the request (i.e., not already running a test case) or
    `429 Too Many Requests` if it's busy. The test case execution runs asynchronously.
 
+## Deployment
+
+This section provides detailed instructions for deploying the UI Test Automation Agent, both to Google Cloud Platform (GCP) and locally using Docker.
+
+### Cloud Deployment (Google Compute Engine)
+
+The agent can be deployed as a containerized application on a Google Compute Engine (GCE) virtual machine, providing a robust and scalable environment for automated UI testing.
+
+#### Prerequisites for Cloud Deployment
+
+*   **Google Cloud Project:** An active GCP project with billing enabled.
+*   **gcloud CLI:** The Google Cloud SDK `gcloud` command-line tool installed and configured.
+*   **Secrets in Google Secret Manager:** The following secrets must be created in Google Secret Manager within your GCP project. These are crucial for the agent's operation and should be stored securely.
+    *   `GROQ_API_KEY`: Your API key for Groq.
+    *   `GROQ_ENDPOINT`: The endpoint URL for Groq.
+    *   `VECTOR_DB_URL`: The URL of your Chroma DB instance.
+    *   `VNC_PW`: The password for accessing the VNC session.
+
+    You can create these secrets using `gcloud` commands. For example:
+    ```bash
+    gcloud secrets create GROQ_API_KEY --replication-policy="automatic" --project=<your-gcp-project-id>
+    echo -n "your-groq-api-key" | gcloud secrets versions add GROQ_API_KEY --data-file=- --project=<your-gcp-project-id>
+    # Repeat for GROQ_ENDPOINT, VECTOR_DB_URL, and VNC_PW
+    ```
+
+#### Deploying Chroma DB (Vector Database)
+
+The agent relies on Chroma DB as its vector database. You can deploy Chroma DB to Google Cloud Run using the provided `cloudbuild_chroma.yaml` configuration.
+
+1.  **Configure `cloudbuild_chroma.yaml`:**
+    *   Update `_CHROMA_BUCKET` with the name of a Google Cloud Storage bucket where Chroma DB will store its data.
+    *   Update `_CHROMA_DATA_PATH` if you want a specific path within the bucket.
+    *   Update `_PORT` if you want Chroma DB to run on a different port (default is `8000`).
+
+2.  **Deploy using Cloud Build:**
+    ```bash
+    gcloud builds submit . --config deployment/cloudbuild_chroma.yaml --substitutions=_CHROMA_BUCKET=<your-chroma-bucket-name>,_CHROMA_DATA_PATH=chroma,_PORT=8000 --project=<your-gcp-project-id>
+    ```
+    After deployment, note the URL of the deployed Chroma DB service; this will be your `VECTOR_DB_URL`.
+
+#### Building and Deploying the Agent on GCE
+
+The `deploy_gce.sh` script automates the process of building the Docker image for the agent and provisioning a GCE VM.
+
+1.  **Navigate to the project root:**
+    ```bash
+    cd <project_root_directory>
+    ```
+
+2.  **Execute the deployment script:**
+    ```bash
+    ./deployment/cloud/deploy_gce.sh
+    ```
+    This script will:
+    *   Enable necessary GCP services.
+    *   Build the Java application using Maven.
+    *   Build the Docker image for the agent using `deployment/cloud/Dockerfile.cloudrun` and push it to Google Container Registry.
+    *   Set up VPC network and firewall rules (if they don't exist).
+    *   Create a GCE instance with the agent container running.
+
+    **Note:** The script uses default values for region, zone, instance name, etc. You can override these by setting environment variables before running the script (e.g., `export REGION="europe-west1"`).
+
+#### Accessing the Deployed Agent
+
+*   **Agent Server:** The agent will be running on the port configured by `AGENT_SERVER_PORT` (default `443`). The internal hostname can be retrieved by executing `curl "http://metadata.google.internal/computeMetadata/v1/instance/hostname" -H "Metadata-Flavor: Google"` inside the VM.
+*   **noVNC Access:** You can access the agent's desktop environment via noVNC in your web browser. The URL will be `https://<EXTERNAL_IP>:<NO_VNC_PORT>`, where `<EXTERNAL_IP>` is the external IP of your GCE instance and `<NO_VNC_PORT>` is the noVNC port (default `6901`). The VNC password is set via the `VNC_PW` secret.
+
+### Local Docker Deployment
+
+For local development and testing, you can run the agent within a Docker container on your machine.
+
+#### Prerequisites for Local Docker Deployment
+
+*   **Docker Desktop:** Ensure Docker Desktop is installed and running on your system.
+
+#### Building and Running the Docker Image
+
+The `build_and_run_docker.bat` script (for Windows) simplifies the process of building the Docker image and running the container.
+
+1.  **Open `deployment/local/Dockerfile`:**
+    *   **IMPORTANT:** Before running the script, open `deployment/local/Dockerfile` and replace the placeholder `VNC_PW` environment variable with a strong password of your choice. For example:
+        ```dockerfile
+        ENV VNC_PW="your_strong_vnc_password"
+        ```
+        (Note: The `build_and_run_docker.bat` script also sets `VNC_PW` to `123456` for convenience, but it's recommended to set it directly in the Dockerfile for consistency and security.)
+
+2.  **Execute the batch script:**
+    ```bash
+    deployment\local\build_and_run_docker.bat
+    ```
+    This script will:
+    *   Build the Docker image named `ui-test-automation-agent` using `deployment/local/Dockerfile`.
+    *   Stop and remove any existing container named `ui-agent`.
+    *   Run a new Docker container, mapping ports `5901` (VNC), `6901` (noVNC), and `8005` (agent server) to your local machine.
+
+#### Accessing the Local Agent
+
+*   **VNC Client:** You can connect to the VNC session using a VNC client at `localhost:5901`.
+*   **noVNC (Web Browser):** Access the agent's desktop environment via your web browser at `http://localhost:6901/vnc.html`.
+*   **Agent Server:** The agent's server will be accessible at `http://localhost:8005`.
+
+Remember to use the VNC password you set in the Dockerfile when prompted.
+
+## Deployment
+
+This section provides detailed instructions for deploying the UI Test Automation Agent, both to Google Cloud Platform (GCP) and locally using Docker.
+
+### Cloud Deployment (Google Compute Engine)
+
+The agent can be deployed as a containerized application on a Google Compute Engine (GCE) virtual machine, providing a robust and scalable environment for automated UI testing.
+
+#### Prerequisites for Cloud Deployment
+
+*   **Google Cloud Project:** An active GCP project with billing enabled.
+*   **gcloud CLI:** The Google Cloud SDK `gcloud` command-line tool installed and configured.
+*   **Secrets in Google Secret Manager:** The following secrets must be created in Google Secret Manager within your GCP project. These are crucial for the agent's operation and should be stored securely.
+    *   `GROQ_API_KEY`: Your API key for Groq.
+    *   `GROQ_ENDPOINT`: The endpoint URL for Groq.
+    *   `VECTOR_DB_URL`: The URL of your Chroma DB instance.
+    *   `VNC_PW`: The password for accessing the VNC session.
+
+    You can create these secrets using `gcloud` commands. For example:
+    ```bash
+    gcloud secrets create GROQ_API_KEY --replication-policy="automatic" --project=<your-gcp-project-id>
+    echo -n "your-groq-api-key" | gcloud secrets versions add GROQ_API_KEY --data-file=- --project=<your-gcp-project-id>
+    # Repeat for GROQ_ENDPOINT, VECTOR_DB_URL, and VNC_PW
+    ```
+
+#### Deploying Chroma DB (Vector Database)
+
+The agent relies on Chroma DB as its vector database. You can deploy Chroma DB to Google Cloud Run using the provided `cloudbuild_chroma.yaml` configuration.
+
+1.  **Configure `cloudbuild_chroma.yaml`:**
+    *   Update `_CHROMA_BUCKET` with the name of a Google Cloud Storage bucket where Chroma DB will store its data.
+    *   Update `_CHROMA_DATA_PATH` if you want a specific path within the bucket.
+    *   Update `_PORT` if you want Chroma DB to run on a different port (default is `8000`).
+
+2.  **Deploy using Cloud Build:**
+    ```bash
+    gcloud builds submit . --config deployment/cloudbuild_chroma.yaml --substitutions=_CHROMA_BUCKET=<your-chroma-bucket-name>,_CHROMA_DATA_PATH=chroma,_PORT=8000 --project=<your-gcp-project-id>
+    ```
+    After deployment, note the URL of the deployed Chroma DB service; this will be your `VECTOR_DB_URL`.
+
+#### Building and Deploying the Agent on GCE
+
+The `deploy_gce.sh` script automates the process of building the Docker image for the agent and provisioning a GCE VM.
+
+1.  **Navigate to the project root:**
+    ```bash
+    cd <project_root_directory>
+    ```
+
+2.  **Execute the deployment script:**
+    ```bash
+    ./deployment/cloud/deploy_gce.sh
+    ```
+    This script will:
+    *   Enable necessary GCP services.
+    *   Build the Java application using Maven.
+    *   Build the Docker image for the agent using `deployment/cloud/Dockerfile.cloudrun` and push it to Google Container Registry.
+    *   Set up VPC network and firewall rules (if they don't exist).
+    *   Create a GCE instance with the agent container running.
+
+    **Note:** The script uses default values for region, zone, instance name, etc. You can override these by setting environment variables before running the script (e.g., `export REGION="europe-west1"`).
+
+#### Accessing the Deployed Agent
+
+*   **Agent Server:** The agent will be running on the port configured by `AGENT_SERVER_PORT` (default `443`). The internal hostname can be retrieved by executing `curl "http://metadata.google.internal/computeMetadata/v1/instance/hostname" -H "Metadata-Flavor: Google"` inside the VM.
+*   **noVNC Access:** You can access the agent's desktop environment via noVNC in your web browser. The URL will be `https://<EXTERNAL_IP>:<NO_VNC_PORT>`, where `<EXTERNAL_IP>` is the external IP of your GCE instance and `<NO_VNC_PORT>` is the noVNC port (default `6901`). The VNC password is set via the `VNC_PW` secret.
+
+
+### Local Docker Deployment
+
+For local development and testing, you can run the agent within a Docker container on your machine.
+
+#### Prerequisites for Local Docker Deployment
+
+*   **Docker Desktop:** Ensure Docker Desktop is installed and running on your system.
+
+#### Building and Running the Docker Image
+
+The `build_and_run_docker.bat` script (for Windows) simplifies the process of building the Docker image and running the container.
+
+1.  **Open `deployment/local/Dockerfile`:**
+    *   **IMPORTANT:** Before running the script, open `deployment/local/Dockerfile` and replace the placeholder `VNC_PW` environment variable with a strong password of your choice. For example:
+        ```dockerfile
+        ENV VNC_PW="your_strong_vnc_password"
+        ```
+        (Note: The `build_and_run_docker.bat` script also sets `VNC_PW` to `123456` for convenience, but it's recommended to set it directly in the Dockerfile for consistency and security.)
+
+2.  **Execute the batch script:**
+    ```bash
+    deployment\local\build_and_run_docker.bat
+    ```
+    This script will:
+    *   Build the Docker image named `ui-test-automation-agent` using `deployment/local/Dockerfile`.
+    *   Stop and remove any existing container named `ui-agent`.
+    *   Run a new Docker container, mapping ports `5901` (VNC), `6901` (noVNC), and `8005` (agent server) to your local machine.
+
+#### Accessing the Local Agent
+
+*   **VNC Client:** You can connect to the VNC session using a VNC client at `localhost:5901`.
+*   **noVNC (Web Browser):** Access the agent's desktop environment via your web browser at `http://localhost:6901/vnc.html`.
+*   **Agent Server:** The agent's server will be accessible at `http://localhost:8005`.
+
+Remember to use the VNC password you set in the Dockerfile when prompted.
+
 ## Contributing
 
 Please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines on contributing to this project.
