@@ -112,12 +112,14 @@ public class ImageMatchingUtil {
             }
         }
 
-        return matches.stream()
+        var boundingBoxes =  matches.stream()
                 .sorted(comparingDouble(MatchResult::score).reversed())
                 .limit(TOP_VISUAL_MATCHES_TO_FIND)
                 .map(match ->
                         new Rectangle(match.point(), new Dimension(elementScreenshot.getWidth(), elementScreenshot.getHeight())))
                 .toList();
+        LOG.info("Found {} matching regions using template matching.", boundingBoxes.size());
+        return boundingBoxes;
     }
 
     public static List<Rectangle> findMatchingRegionsWithORB(BufferedImage wholeScreenshot, BufferedImage elementScreenshot) {
@@ -167,11 +169,13 @@ public class ImageMatchingUtil {
                 getIdentifiedRegionBoundingBox(cluster, elementKeyPointsList, elementMat, maxAllowedRegionWidth, maxAllowedRegionHeight)
                         .ifPresent(foundMatches::add));
 
-        return foundMatches.stream()
+        var boundingBoxes =  foundMatches.stream()
                 .sorted(comparingDouble(MatchResultWithRectangle::score).reversed())
                 .limit(TOP_VISUAL_MATCHES_TO_FIND)
                 .map(MatchResultWithRectangle::rectangle)
-                .collect(toList());
+                .toList();
+        LOG.info("Found {} matching regions using ORB (Oriented FAST and Rotated BRIEF) algorithm.", boundingBoxes.size());
+        return boundingBoxes;
     }
 
     private static List<Cluster<KeyPointClusterable>> getClusters(BufferedImage elementScreenshot, MatOfKeyPoint keypointsWhole,

@@ -34,17 +34,17 @@ public class ChatModelEventListener implements ChatModelListener {
     public void onResponse(ChatModelResponseContext responseContext) {
         ChatResponse chatResponse = responseContext.chatResponse();
         AiMessage aiMessage = getAiMessage(chatResponse);
-        log.info("AI Message Text: {}", aiMessage.text());
-        log.info("AI Message tool execution requests: {}", aiMessage.toolExecutionRequests());
+        log.debug("AI Message Text: {}", aiMessage.text());
+        log.debug("AI Message tool execution requests: {}", aiMessage.toolExecutionRequests());
         ChatResponseMetadata metadata = chatResponse.metadata();
         if (metadata != null) {
-            log.info("Metadata Model Name: {}", metadata.modelName());
-            log.info("Metadata Finish Reason: {}", metadata.finishReason());
+            log.debug("Metadata Model Name: {}", metadata.modelName());
+            log.debug("Metadata Finish Reason: {}", metadata.finishReason());
             TokenUsage tokenUsage = metadata.tokenUsage();
             if (tokenUsage != null) {
-                log.info("Input Token Count: {}", tokenUsage.inputTokenCount());
-                log.info("Output Token Count: {}", tokenUsage.outputTokenCount());
-                log.info("Total Token Count: {}", tokenUsage.totalTokenCount());
+                log.debug("Input Token Count: {}", tokenUsage.inputTokenCount());
+                log.debug("Output Token Count: {}", tokenUsage.outputTokenCount());
+                log.debug("Total Token Count: {}", tokenUsage.totalTokenCount());
             }
         }
     }

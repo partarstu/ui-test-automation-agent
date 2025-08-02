@@ -33,7 +33,7 @@ import static org.tarik.ta.utils.CommonUtils.*;
 
 public class MouseTools extends AbstractTools {
     private static final Logger LOG = LoggerFactory.getLogger(MouseTools.class);
-    private static final int MOUSE_ACTION_DELAY_MILLIS = 500;
+    private static final int MOUSE_ACTION_DELAY_MILLIS = 100;
 
     @Tool(value = "Performs a right click with a mouse at the specified UI element." +
             "Use this tool when you need to right-click on a specific UI element. " +

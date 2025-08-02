@@ -334,6 +334,27 @@ public class AgentConfig {
         return ELEMENT_LOCATOR_MIN_INTERSECTION_PERCENTAGE.value();
     }
 
+    private static final ConfigProperty<Integer> ELEMENT_LOCATOR_VISUAL_GROUNDING_MODEL_VOTE_COUNT =
+            loadPropertyAsInteger("element.locator.visual.grounding.model.vote.count", "VISUAL_GROUNDING_MODEL_VOTE_COUNT", "5", false);
+
+    public static int getElementLocatorVisualGroundingModelVoteCount() {
+        return ELEMENT_LOCATOR_VISUAL_GROUNDING_MODEL_VOTE_COUNT.value();
+    }
+
+    private static final ConfigProperty<Integer> ELEMENT_LOCATOR_VALIDATION_MODEL_VOTE_COUNT =
+            loadPropertyAsInteger("element.locator.validation.model.vote.count", "VALIDATION_MODEL_VOTE_COUNT", "3", false);
+
+    public static int getElementLocatorValidationModelVoteCount() {
+        return ELEMENT_LOCATOR_VALIDATION_MODEL_VOTE_COUNT.value();
+    }
+
+    private static final ConfigProperty<Double> BBOX_CLUSTERING_MIN_INTERSECTION_RATIO =
+            loadPropertyAsDouble("element.locator.bbox.clustering.min.intersection.ratio", "BBOX_CLUSTERING_MIN_INTERSECTION_RATIO", "0.7", false);
+
+    public static double getBboxClusteringMinIntersectionRatio() {
+        return BBOX_CLUSTERING_MIN_INTERSECTION_RATIO.value();
+    }
+
     // -----------------------------------------------------
     // User UI dialogs
     private static final ConfigProperty<Integer> DIALOG_DEFAULT_HORIZONTAL_GAP =

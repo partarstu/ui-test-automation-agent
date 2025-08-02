@@ -52,14 +52,6 @@ public class GenAiModel implements AutoCloseable {
         return parseModelResponseAsObject(response, objectClass);
     }
 
-    public <T> T generateAndGetResponseAsObject(@NotNull StructuredResponsePrompt<T> prompt,
-                                                @NotNull List<ToolSpecification> toolSpecifications,
-                                                @NotNull String generationDescription) {
-        Class<T> objectClass = prompt.getResponseObjectClass();
-        var response = generate(prompt.getSystemMessage(), prompt.getUserMessage(), toolSpecifications, generationDescription);
-        return parseModelResponseAsObject(response, objectClass);
-    }
-
     public ChatResponse generate(@NotNull AbstractPrompt prompt,
                                  @NotNull List<ToolSpecification> toolSpecifications,
                                  @NotNull String generationDescription) {
@@ -107,8 +99,7 @@ public class GenAiModel implements AutoCloseable {
         requireNonNull(response, "Model response can't be null");
         requireNonNull(responseMetadata, "Model response metadata can't be null");
         requireNonNull(message, "Model response message can't be null");
-        LOG.info("Done content generation for {} by {} in {} millis",
+        LOG.debug("Done content generation for {} by {} in {} millis",
                 generationDescription, responseMetadata.modelName(), between(start, now()).toMillis());
-        LOG.info("Tokens usage: {}", response.tokenUsage());
     }
 }

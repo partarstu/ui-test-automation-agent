@@ -14,7 +14,7 @@ docker stop ui-agent >nul 2>&1
 docker rm ui-agent >nul 2>&1
 
 echo Running Docker container...
-docker run -d -p 5901:5901 -p 6901:6901 -p 8005:8005 -e VNC_PW=123456 -e VNC_RESOLUTION=1920x1080 -e PORT=8005 --shm-size=4g --name ui-agent ui-test-automation-agent /app/java_app_startup.sh
+docker run -d -p 5901:5901 -p 6901:6901 -p 8005:8005 -e VNC_PW=123456 -e VNC_RESOLUTION=1920x1080 -e PORT=8005 -e AGENT_HOST=0.0.0.0 --shm-size=4g --name ui-agent ui-test-automation-agent /app/java_app_startup.sh
 
 IF %ERRORLEVEL% NEQ 0 (
     echo Docker container failed to start. Exiting.

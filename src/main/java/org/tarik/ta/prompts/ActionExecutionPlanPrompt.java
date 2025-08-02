@@ -21,19 +21,19 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.Content;
 import org.jetbrains.annotations.NotNull;
-import org.tarik.ta.dto.TestCaseExecutionPlan;
+import org.tarik.ta.dto.ExecutionPlan;
 
 import java.util.List;
 import java.util.Map;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-public class TestCaseExecutionPlanPrompt extends StructuredResponsePrompt<TestCaseExecutionPlan> {
-    private static final String SYSTEM_PROMPT_TEMPLATE_FILE = "test_case_execution_plan_prompt.txt";
-    private static final String TEST_STEPS_PLACEHOLDER = "test_steps";
+public class ActionExecutionPlanPrompt extends StructuredResponsePrompt<ExecutionPlan> {
+    private static final String SYSTEM_PROMPT_TEMPLATE_FILE = "action_execution_plan_prompt.txt";
+    private static final String ACTIONS_PLACEHOLDER = "actions";
     private static final String AVAILABLE_TOOLS_PLACEHOLDER = "available_tools";
 
-    private TestCaseExecutionPlanPrompt(Map<String, String> systemMessagePlaceholders, Map<String, String> userMessagePlaceholders) {
+    private ActionExecutionPlanPrompt(Map<String, String> systemMessagePlaceholders, Map<String, String> userMessagePlaceholders) {
         super(systemMessagePlaceholders, userMessagePlaceholders);
     }
 
@@ -43,8 +43,8 @@ public class TestCaseExecutionPlanPrompt extends StructuredResponsePrompt<TestCa
 
     @NotNull
     @Override
-    public Class<TestCaseExecutionPlan> getResponseObjectClass() {
-        return TestCaseExecutionPlan.class;
+    public Class<ExecutionPlan> getResponseObjectClass() {
+        return ExecutionPlan.class;
     }
 
     @Override
@@ -55,12 +55,12 @@ public class TestCaseExecutionPlanPrompt extends StructuredResponsePrompt<TestCa
     @Override
     protected String getUserMessageTemplate() {
         return """
-                The provided to you test case steps:
+                The provided to you actions:
                 {{%s}}
                 
                 All available for interaction tools:
                 {{%s}}
-                """.formatted(TEST_STEPS_PLACEHOLDER, AVAILABLE_TOOLS_PLACEHOLDER);
+                """.formatted(ACTIONS_PLACEHOLDER, AVAILABLE_TOOLS_PLACEHOLDER);
     }
 
     @Override
@@ -70,11 +70,11 @@ public class TestCaseExecutionPlanPrompt extends StructuredResponsePrompt<TestCa
 
     public static class Builder {
         private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
-        private List<TestStepInfo> testSteps;
+        private List<ActionInfo> actions;
         private List<ToolSpecification> toolSpecifications;
 
-        public Builder withTestSteps(@NotNull List<TestStepInfo> testSteps) {
-            this.testSteps = testSteps;
+        public Builder withActions(@NotNull List<ActionInfo> actions) {
+            this.actions = actions;
             return this;
         }
 
@@ -83,28 +83,28 @@ public class TestCaseExecutionPlanPrompt extends StructuredResponsePrompt<TestCa
             return this;
         }
 
-        public TestCaseExecutionPlanPrompt build() {
+        public ActionExecutionPlanPrompt build() {
             checkArgument(!toolSpecifications.isEmpty(), "At least one tool should be provided");
-            checkArgument(!testSteps.isEmpty(), "At least one test step should be provided");
+            checkArgument(!actions.isEmpty(), "At least one action should be provided");
             var toolInfos = toolSpecifications.stream()
                     .map(toolSpec->
                             new ToolInfo(toolSpec.name(), toolSpec.description(), toolSpec.parameters().properties().toString()))
                     .toList();
             try {
                 Map<String, String> userMessagePlaceholders = Map.of(
-                        TEST_STEPS_PLACEHOLDER, OBJECT_MAPPER.writeValueAsString(testSteps),
+                        ACTIONS_PLACEHOLDER, OBJECT_MAPPER.writeValueAsString(actions),
                         AVAILABLE_TOOLS_PLACEHOLDER, OBJECT_MAPPER.writeValueAsString(toolInfos)
                 );
-                return new TestCaseExecutionPlanPrompt(Map.of(), userMessagePlaceholders);
+                return new ActionExecutionPlanPrompt(Map.of(), userMessagePlaceholders);
             } catch (JsonProcessingException e) {
-                throw new IllegalStateException("Could not convert test steps to JSON", e);
+                throw new IllegalStateException("Could not convert actions to JSON", e);
             }
         }
 
-        public record TestStepInfo(String testStepId, String stepDescription, List<String> testData) {
+        public record ActionInfo(String actionId, String actionDescription, List<String> inputData) {
         }
 
-        private record ToolInfo(String toolName, String stepDescription, String parametersDescription) {
+        private record ToolInfo(String toolName, String toolDescription, String parametersDescription) {
         }
     }
 }

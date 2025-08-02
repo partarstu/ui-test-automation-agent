@@ -22,16 +22,16 @@ import java.awt.*;
 
 @JsonClassDescription("a single bounding box with coordinates")
 public record BoundingBox(
- @JsonFieldDescription("The x-coordinate of the top-left corner of the bounding box.") int x1,
- @JsonFieldDescription("The y-coordinate of the top-left corner of the bounding box.") int y1,
- @JsonFieldDescription("The x-coordinate of the bottom-right corner of the bounding box.") int x2,
- @JsonFieldDescription("The y-coordinate of the bottom-right corner of the bounding box.") int y2
+        @JsonFieldDescription("The x-coordinate of the top-left corner of the bounding box.") int x1,
+        @JsonFieldDescription("The y-coordinate of the top-left corner of the bounding box.") int y1,
+        @JsonFieldDescription("The x-coordinate of the bottom-right corner of the bounding box.") int x2,
+        @JsonFieldDescription("The y-coordinate of the bottom-right corner of the bounding box.") int y2
 ) {
     public Rectangle getActualBoundingBox(int actualImageWidth, int actualImageHeight) {
-        var actualX1 =         x1*actualImageWidth/1000;
-        var actualY1 =         y1*actualImageHeight/1000;
-        var actualX2 =         x2*actualImageWidth/1000;
-        var actualY2 =         y2*actualImageHeight/1000;
-        return new Rectangle(actualX1, actualY1, actualX2-actualX1, actualY2-actualY1);
+        var actualX1 = x1 * actualImageWidth / 1000;
+        var actualY1 = y1 * actualImageHeight / 1000;
+        var actualX2 = x2 * actualImageWidth / 1000;
+        var actualY2 = y2 * actualImageHeight / 1000;
+        return new Rectangle(actualX1, actualY1, actualX2 - actualX1, actualY2 - actualY1);
     }
 }

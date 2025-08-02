@@ -36,7 +36,7 @@
         <openblas.version>0.3.28-1.5.11</openblas.version>
         <commons-math3.version>3.6.1</commons-math3.version>
         <a2a.sdk.version>0.2.3.Beta1</a2a.sdk.version>
-        <main.class/>
+        <main.class>org.tarik.ta.Server</main.class>
     </properties>
 
     <dependencies>
@@ -161,12 +161,6 @@
         </dependency>
     </dependencies>
     <profiles>
-        <profile>
-            <id>server</id>
-            <properties>
-                <main.class>org.tarik.ta.Server</main.class>
-            </properties>
-        </profile>
         <profile>
             <id>windows</id>
             <activation>

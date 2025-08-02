@@ -267,8 +267,7 @@ public class CommonUtils {
         return new Point((int) (scaledScreenCoordinates.getX() * uiScaleX), (int) (scaledScreenCoordinates.getY() * uiScaleY));
     }
 
-    public static Optional<UiElementIdentificationResult> getFutureResult(Future<UiElementIdentificationResult> future,
-                                                                          String resultDescription) {
+    public static <T> Optional<T> getFutureResult(Future<T> future, String resultDescription) {
         try {
             return ofNullable(future.get());
         } catch (InterruptedException | ExecutionException e) {

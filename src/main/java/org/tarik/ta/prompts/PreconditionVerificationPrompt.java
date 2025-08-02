@@ -50,7 +50,7 @@ public class PreconditionVerificationPrompt extends StructuredResponsePrompt<Ver
     @Override
     protected String getUserMessageTemplate() {
         return ("""
-                Verify that the following test case precondition is met: {{%s}}.
+                The test case precondition is: {{%s}}.
                 
                 Here is the screenshot:
                 """)

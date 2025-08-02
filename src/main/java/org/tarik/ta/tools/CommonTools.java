@@ -18,13 +18,17 @@ package org.tarik.ta.tools;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 
-import java.io.IOException;
+import java.awt.*;
+import java.net.URI;
 
+import static java.awt.Desktop.getDesktop;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.ERROR;
 import static org.tarik.ta.utils.CommonUtils.parseStringAsInteger;
 import static org.tarik.ta.utils.CommonUtils.sleepSeconds;
 
 public class CommonTools extends AbstractTools {
+    private static final int BROWSER_OPEN_TIME_SECONDS = 1;
+
     @Tool(value = "Waits the specified amount of seconds. Use this tool when you need to wait after some action.")
     public static ToolExecutionResult waitSeconds(@P(value = "The specific amount of seconds to wait.") String secondsAmount) {
         return parseStringAsInteger(secondsAmount)
@@ -36,13 +40,19 @@ public class CommonTools extends AbstractTools {
                         .formatted(secondsAmount), true));
     }
 
-    @Tool(value = "Opens the Chrome browser with the specified URL. Use this tool to navigate to a web page.")
-    public static ToolExecutionResult openChromeBrowser(@P(value = "The URL to open in Chrome.") String url) {
+    @Tool(value = "Opens the default browser with the specified URL. Use this tool to navigate to a web page.")
+    public static ToolExecutionResult openBrowser(@P(value = "The URL to open in the browser.") String url) {
         try {
-            Runtime.getRuntime().exec(new String[]{"cmd", "/c", "start chrome"});
-            return getSuccessfulResult("Successfully opened Chrome with URL: " + url);
-        } catch (IOException e) {
-            return getFailedToolExecutionResult("Failed to open Chrome browser: " + e.getMessage(), false);
+            if (Desktop.isDesktopSupported() && getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                getDesktop().browse(new URI(url));
+                sleepSeconds(BROWSER_OPEN_TIME_SECONDS);
+                return getSuccessfulResult("Successfully opened default browser with URL: " + url);
+            } else {
+                return getFailedToolExecutionResult("Failed to open default browser, because Desktop Browse is not supported " +
+                        "on this platform.", false);
+            }
+        } catch (Exception e) {
+            return getFailedToolExecutionResult("Failed to open default browser: " + e.getMessage(), false);
         }
     }
 }

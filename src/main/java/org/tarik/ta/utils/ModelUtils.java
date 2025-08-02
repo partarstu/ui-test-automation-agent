@@ -25,7 +25,8 @@ import org.tarik.ta.annotations.JsonClassDescription;
 import org.tarik.ta.annotations.JsonFieldDescription;
 
 import java.lang.reflect.Field;
-import java.util.Optional;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Optional.ofNullable;
@@ -49,7 +50,8 @@ public class ModelUtils {
     }
 
     public static String rectifyJsonResponse(String originalModelResponse) {
-        return originalModelResponse.replaceAll("[\\S\\s]*```json", "").replaceAll("```[\\S\\s]*", "");
+        return originalModelResponse.replaceAll("[\\S\\s]*```json", "")
+                .replaceAll(".*```[\\S\\s]*", "");
     }
 
     public static <T> String getJsonSchemaDescription(Class<T> clazz) {
@@ -69,8 +71,8 @@ public class ModelUtils {
     }
 
     public static String extendPromptWithResponseObjectInfo(String prompt, Class<?> objectClass) {
-        var responseFormatDescription = ("Output only a valid JSON object representing %s, build this JSON object according " +
-                "to its JSON schema:\n%s")
+        var responseFormatDescription = ("Output only a valid JSON object representing %s, build this JSON object strictly according " +
+                "to its following JSON schema:\n%s")
                 .formatted(getClassDescriptionForPrompt(objectClass), getJsonSchemaDescription(objectClass));
         return "%s\n\n%s".formatted(prompt, responseFormatDescription);
     }
@@ -94,12 +96,35 @@ public class ModelUtils {
                                     propertySchema.setDescription(description);
                                     if (propertySchema.isObjectSchema()) {
                                         applyFieldDescriptionsRecursively(propertySchema, field.getType());
+                                    } else if (propertySchema.isArraySchema()) {
+                                        var items = propertySchema.asArraySchema().getItems();
+                                        if (items.isSingleItems()) {
+                                            JsonSchema itemSchema = items.asSingleItems().getSchema();
+                                            if (itemSchema.isObjectSchema()) {
+                                                applyFieldDescriptionsRecursively(itemSchema, getCollectionItemType(field));
+                                            }
+                                        }
                                     }
                                 }
                             }
                         });
             }
         }
+    }
+
+    private static Class<?> getCollectionItemType(Field field) {
+        Type genericType = field.getGenericType();
+        if (genericType instanceof ParameterizedType parameterizedType) {
+            Type itemType = parameterizedType.getActualTypeArguments()[0];
+            if (itemType instanceof Class) {
+                return (Class<?>) itemType;
+            } else if (itemType instanceof ParameterizedType) {
+                return (Class<?>) ((ParameterizedType) itemType).getRawType();
+            }
+        } else if (field.getType().isArray()) {
+            return field.getType().getComponentType();
+        }
+        throw new IllegalStateException("Couldn't determine collection item type for field " + field.getName());
     }
 
     private static ObjectMapper createObjectMapper() {
