@@ -218,7 +218,8 @@ override properties file settings.**
 * `vector.db.url` (Env: `VECTOR_DB_URL`): Required URL for the vector database connection. Default: `http://localhost:8020`.
 * `retriever.top.n` (Env: `RETRIEVER_TOP_N`): Number of top similar elements to retrieve from the vector DB based on semantic element name
   similarity. Default: `5`.
-* `model.provider` (Env: `MODEL_PROVIDER`): AI model provider (`google`, `openai`, or `groq`). Default: `google`.
+* `instruction.model.provider` (Env: `INSTRUCTION_MODEL_PROVIDER`): AI model provider for instruction model (`google`, `openai`, or `groq`). Default: `google`.
+* `vision.model.provider` (Env: `VISION_MODEL_PROVIDER`): AI model provider for vision model (`google`, `openai`, or `groq`). Default: `google`.
 * `instruction.model.name` (Env: `INSTRUCTION_MODEL_NAME`): Name/deployment ID of the model for processing test case actions and
   verifications. Default: `gemini-2.5-flash`.
 * `vision.model.name` (Env: `VISION_MODEL_NAME`): Name/deployment ID of the vision-capable model. Default: `gemini-2.5-flash`.
