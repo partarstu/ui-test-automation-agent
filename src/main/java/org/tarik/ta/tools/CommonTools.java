@@ -20,6 +20,7 @@ import dev.langchain4j.agent.tool.Tool;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.tarik.ta.utils.CommonUtils;
 
 import java.awt.*;
 import java.net.URI;
@@ -74,15 +75,17 @@ public class CommonTools extends AbstractTools {
                 } else if (os.contains("mac")) {
                     processBuilder.command("open", url);
                 } else {
-                    processBuilder.command("xdg-open", url);
+                    String browserCommand = System.getenv("BROWSER_COMMAND");
+                    if (browserCommand == null || browserCommand.trim().isEmpty()) {
+                        browserCommand = "chromium-browser";
+                    }
+                    processBuilder.command(browserCommand, "--no-sandbox", "--start-maximized", url);
                 }
                 LOG.debug("Executing command: {}", processBuilder.command());
                 Process process = processBuilder.start();
-                int exitCode = process.waitFor();
-                if (process.exitValue() != 0) {
-                    var errorMessage = "Failed to open browser. Exit code: %s. Output: %s\n. Error: %s\n"
-                            .formatted(exitCode, IOUtils.toString(process.getInputStream(), UTF_8),
-                                    IOUtils.toString(process.getErrorStream(), UTF_8));
+                if (!process.isAlive()) {
+                    var errorMessage = "Failed to open browser. Error: %s\n"
+                            .formatted(IOUtils.toString(process.getErrorStream(), UTF_8));
                     return getFailedToolExecutionResult(errorMessage, false);
                 }
             }

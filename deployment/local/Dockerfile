@@ -28,8 +28,7 @@ RUN apt-get install --reinstall libgtk2.0-0 -y
 RUN apt-get clean
 
 # --- Application Setup ---
-# Copy your Java application JAR file into the container.
-# We'll place it in the app directory.
+# Copy Java application JAR file into the container.
 COPY ${SOURCE_JAR_PATH} ${DESTINATION_JAR_PATH}
 RUN mkdir -p ${APP_LOG_DIR}
 RUN chmod 777 -R ${APP_LOG_DIR}
@@ -46,7 +45,8 @@ ENV GROQ_ENDPOINT="https://api.groq.com/openai/v1"
 ENV INSTRUCTION_MODEL_NAME="meta-llama/llama-4-maverick-17b-128e-instruct"
 ENV LOG_LEVEL="INFO"
 ENV logging.level.dev.langchain4j="INFO"
-ENV MODEL_PROVIDER="groq"
+ENV INSTRUCTION_MODEL_PROVIDER="groq"
+ENV VISION_MODEL_PROVIDER="groq"
 ENV UNATTENDED_MODE="false"
 ENV VISION_MODEL_NAME="meta-llama/llama-4-maverick-17b-128e-instruct"
 ENV VECTOR_DB_URL=""

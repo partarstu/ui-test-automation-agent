@@ -31,7 +31,8 @@ export VNC_RESOLUTION="${VNC_RESOLUTION:-1920x1080}"
 export LOG_LEVEL="${LOG_LEVEL:-INFO}"
 export INSTRUCTION_MODEL_NAME="${INSTRUCTION_MODEL_NAME:-meta-llama/llama-4-maverick-17b-128e-instruct}"
 export VISION_MODEL_NAME="${VISION_MODEL_NAME:-meta-llama/llama-4-maverick-17b-128e-instruct}"
-export MODEL_PROVIDER="${MODEL_PROVIDER:-groq}"
+export INSTRUCTION_MODEL_PROVIDER="${MODEL_PROVIDER:-groq}"
+export VISION_MODEL_PROVIDER="${MODEL_PROVIDER:-groq}"
 export UNATTENDED_MODE="${UNATTENDED_MODE:-false}"
 export DEBUG_MODE="${DEBUG_MODE:-true}"
 export JAVA_APP_STARTUP_SCRIPT="${JAVA_APP_STARTUP_SCRIPT:-/app/java_app_startup.sh}"
@@ -123,7 +124,7 @@ gcloud beta compute instances create ${INSTANCE_NAME} \
     --graceful-shutdown \
     --graceful-shutdown-max-duration=1m \
     --metadata-from-file=startup-script=gce_startup_script.sh \
-    --metadata=gcp-project-id=${PROJECT_ID},gcp-service-name=${SERVICE_NAME},gcp-image-tag=${IMAGE_TAG},no-vnc-port=${NO_VNC_PORT},vnc-port=${VNC_PORT},agent-server-port=${AGENT_SERVER_PORT},app-final-log-folder=${APP_LOG_FINAL_FOLDER},VNC_RESOLUTION=${VNC_RESOLUTION},LOG_LEVEL=${LOG_LEVEL},INSTRUCTION_MODEL_NAME=${INSTRUCTION_MODEL_NAME},VISION_MODEL_NAME=${VISION_MODEL_NAME},MODEL_PROVIDER=${MODEL_PROVIDER},UNATTENDED_MODE=${UNATTENDED_MODE},DEBUG_MODE=${DEBUG_MODE},java-app-startup-script=${JAVA_APP_STARTUP_SCRIPT} \
+    --metadata=gcp-project-id=${PROJECT_ID},gcp-service-name=${SERVICE_NAME},gcp-image-tag=${IMAGE_TAG},no-vnc-port=${NO_VNC_PORT},vnc-port=${VNC_PORT},agent-server-port=${AGENT_SERVER_PORT},app-final-log-folder=${APP_LOG_FINAL_FOLDER},VNC_RESOLUTION=${VNC_RESOLUTION},LOG_LEVEL=${LOG_LEVEL},INSTRUCTION_MODEL_NAME=${INSTRUCTION_MODEL_NAME},VISION_MODEL_NAME=${VISION_MODEL_NAME},VISION_MODEL_PROVIDER=${VISION_MODEL_PROVIDER},INSTRUCTION_MODEL_PROVIDER=${INSTRUCTION_MODEL_PROVIDER},UNATTENDED_MODE=${UNATTENDED_MODE},DEBUG_MODE=${DEBUG_MODE},java-app-startup-script=${JAVA_APP_STARTUP_SCRIPT} \
     --labels=container-vm=cos-121-18867-90-97
 
 echo "Waiting for instance ${INSTANCE_NAME} to be running..."
