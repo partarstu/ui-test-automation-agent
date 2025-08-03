@@ -17,10 +17,12 @@ package org.tarik.ta.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import org.jetbrains.annotations.NotNull;
 import org.tarik.ta.annotations.JsonClassDescription;
 import org.tarik.ta.annotations.JsonFieldDescription;
 
@@ -42,26 +44,16 @@ public class ModelUtils {
         String modelName = response.metadata().modelName();
         checkArgument(isNotBlank(responseText), "Got empty response from %s model expecting %s object.", modelName, objectClassName);
         try {
-            return OBJECT_MAPPER.readValue(rectifyJsonResponse(responseText), objectClass);
+            return OBJECT_MAPPER.readValue(responseText, objectClass);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Couldn't parse the following %s model response as a %s object: %s".formatted(
                     modelName, objectClassName, responseText));
         }
     }
 
-    public static String rectifyJsonResponse(String originalModelResponse) {
-        return originalModelResponse.replaceAll("[\\S\\s]*```json", "")
-                .replaceAll(".*```[\\S\\s]*", "");
-    }
-
-    public static <T> String getJsonSchemaDescription(Class<T> clazz) {
+    public static <T> String getJsonSchemaAsString(Class<T> clazz) {
         try {
-            JsonSchema schema = JSON_SCHEMA_GENERATOR.generateSchema(clazz);
-            ofNullable(clazz.getAnnotation(JsonClassDescription.class))
-                    .map(JsonClassDescription::value)
-                    .ifPresent(schema::setDescription);
-
-            applyFieldDescriptionsRecursively(schema, clazz);
+            JsonSchema schema = getJsonSchemaWithDescription(clazz);
             String schemaString = OBJECT_MAPPER.writeValueAsString(schema);
             schemaString = schemaString.replaceAll("\"id\":\\s*\"[^\"]*\",?", "");
             return schemaString;
@@ -70,10 +62,25 @@ public class ModelUtils {
         }
     }
 
+    public static <T> @NotNull JsonSchema getJsonSchemaWithDescription(Class<T> clazz) {
+        JsonSchema schema;
+        try {
+            schema = JSON_SCHEMA_GENERATOR.generateSchema(clazz);
+        } catch (JsonMappingException e) {
+            throw new RuntimeException(e);
+        }
+        ofNullable(clazz.getAnnotation(JsonClassDescription.class))
+                .map(JsonClassDescription::value)
+                .ifPresent(schema::setDescription);
+
+        applyFieldDescriptionsRecursively(schema, clazz);
+        return schema;
+    }
+
     public static String extendPromptWithResponseObjectInfo(String prompt, Class<?> objectClass) {
         var responseFormatDescription = ("Output only a valid JSON object representing %s, build this JSON object strictly according " +
                 "to its following JSON schema:\n%s")
-                .formatted(getClassDescriptionForPrompt(objectClass), getJsonSchemaDescription(objectClass));
+                .formatted(getClassDescriptionForPrompt(objectClass), getJsonSchemaAsString(objectClass));
         return "%s\n\n%s".formatted(prompt, responseFormatDescription);
     }
 
@@ -133,5 +140,4 @@ public class ModelUtils {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         return mapper;
     }
-
 }

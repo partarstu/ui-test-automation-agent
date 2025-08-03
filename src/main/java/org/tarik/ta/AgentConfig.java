@@ -83,8 +83,15 @@ public class AgentConfig {
     private static final ConfigProperty<Integer> RETRIEVER_TOP_N = loadPropertyAsInteger("retriever.top.n", "RETRIEVER_TOP_N", "3", false);
 
     // Model Config
-    private static final ConfigProperty<ModelProvider> MODEL_PROVIDER =
-            getProperty("model.provider", "MODEL_PROVIDER", "google", s -> stream(ModelProvider.values())
+    private static final ConfigProperty<ModelProvider> INSTRUCTION_MODEL_PROVIDER =
+            getProperty("instruction.model.provider", "INSTRUCTION_MODEL_PROVIDER", "google", s -> stream(ModelProvider.values())
+                    .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(s))
+                    .findAny()
+                    .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported model provider. Supported ones: %s".formatted(s,
+                            Arrays.toString(ModelProvider.values()))))), false);
+
+    private static final ConfigProperty<ModelProvider> VISION_MODEL_PROVIDER =
+            getProperty("vision.model.provider", "VISION_MODEL_PROVIDER", "google", s -> stream(ModelProvider.values())
                     .filter(provider -> provider.name().toLowerCase().equalsIgnoreCase(s))
                     .findAny()
                     .orElseThrow(() -> new IllegalArgumentException(("%s is not a supported model provider. Supported ones: %s".formatted(s,
@@ -178,8 +185,12 @@ public class AgentConfig {
 
     // -----------------------------------------------------
     // Model Config
-    public static ModelProvider getModelProvider() {
-        return MODEL_PROVIDER.value();
+    public static ModelProvider getInstructionModelProvider() {
+        return INSTRUCTION_MODEL_PROVIDER.value();
+    }
+
+    public static ModelProvider getVisionModelProvider() {
+        return VISION_MODEL_PROVIDER.value();
     }
 
     public static String getInstructionModelName() {

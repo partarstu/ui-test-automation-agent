@@ -21,8 +21,9 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.ChatRequestParameters;
+import dev.langchain4j.model.chat.request.ResponseFormat;
+import dev.langchain4j.model.chat.request.ResponseFormatType;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +33,6 @@ import org.tarik.ta.prompts.StructuredResponsePrompt;
 import java.time.Instant;
 import java.util.List;
 
-import static dev.langchain4j.model.chat.request.ResponseFormat.TEXT;
 import static java.time.Duration.between;
 import static java.time.Instant.now;
 import static java.util.Objects.requireNonNull;
@@ -48,7 +48,7 @@ public class GenAiModel implements AutoCloseable {
 
     public <T> T generateAndGetResponseAsObject(@NotNull StructuredResponsePrompt<T> prompt, @NotNull String generationDescription) {
         Class<T> objectClass = prompt.getResponseObjectClass();
-        var response = generate(prompt.getSystemMessage(), prompt.getUserMessage(), generationDescription);
+        var response = generate(prompt.getSystemMessage(), prompt.getUserMessage(), generationDescription, ResponseFormatType.JSON);
         return parseModelResponseAsObject(response, objectClass);
     }
 
@@ -70,27 +70,40 @@ public class GenAiModel implements AutoCloseable {
     }
 
     private ChatResponse generate(SystemMessage systemMessage, UserMessage userMessage,
-                                  String generationDescription) {
+                                  String generationDescription, ResponseFormatType responseFormatType) {
         var start = now();
-        var response = chatLanguageModel.chat(userMessage, systemMessage);
+        var chatRequest = ChatRequest.builder()
+                .messages(systemMessage, userMessage)
+                .responseFormat(ResponseFormat.builder().type(responseFormatType).build())
+                .build();
+        var response = chatLanguageModel.chat(chatRequest);
+        validateAndLogResponse(generationDescription, response, start);
+        return response;
+    }
+
+    private ChatResponse generate(SystemMessage systemMessage, UserMessage userMessage,
+                                  String generationDescription) {
+        return generate(systemMessage, userMessage, generationDescription, ResponseFormatType.TEXT);
+    }
+
+    private ChatResponse generate(SystemMessage systemMessage, UserMessage userMessage,
+                                  List<ToolSpecification> toolSpecifications, String generationDescription,
+                                  ResponseFormatType responseFormatType) {
+        var start = now();
+        var paramsBuilder = ChatRequestParameters.builder().toolSpecifications(toolSpecifications);
+        var chatRequest = ChatRequest.builder()
+                .messages(systemMessage, userMessage)
+                .responseFormat(ResponseFormat.builder().type(responseFormatType).build())
+                .parameters(paramsBuilder.build())
+                .build();
+        var response = chatLanguageModel.chat(chatRequest);
         validateAndLogResponse(generationDescription, response, start);
         return response;
     }
 
     private ChatResponse generate(SystemMessage systemMessage, UserMessage userMessage,
                                   List<ToolSpecification> toolSpecifications, String generationDescription) {
-        var start = now();
-        var paramsBuilder = ChatRequestParameters.builder().toolSpecifications(toolSpecifications);
-        if (!toolSpecifications.isEmpty() && chatLanguageModel instanceof GoogleAiGeminiChatModel) {
-            paramsBuilder.responseFormat(TEXT);
-        }
-        var chatRequest = ChatRequest.builder()
-                .messages(systemMessage, userMessage)
-                .parameters(paramsBuilder.build())
-                .build();
-        var response = chatLanguageModel.chat(chatRequest);
-        validateAndLogResponse(generationDescription, response, start);
-        return response;
+        return generate(systemMessage, userMessage, toolSpecifications, generationDescription, ResponseFormatType.TEXT);
     }
 
     private void validateAndLogResponse(String generationDescription, ChatResponse response, Instant start) {

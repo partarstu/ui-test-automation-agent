@@ -19,7 +19,7 @@
     <properties>
         <jdk.version>24</jdk.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <langchain4j.version>1.1.0</langchain4j.version>
+        <langchain4j.version>1.2.0</langchain4j.version>
         <logback.version>1.5.18</logback.version>
         <junit.version>5.12.1</junit.version>
         <license.maven.plugin.version>5.0.0</license.maven.plugin.version>
@@ -79,32 +79,32 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-azure-open-ai</artifactId>
-            <version>1.1.0-rc1</version>
+            <version>${langchain4j.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>
-            <version>1.1.0</version>
+            <version>${langchain4j.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-vertex-ai-gemini</artifactId>
-            <version>1.1.0-beta7</version>
+            <version>1.2.0-beta8</version>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-google-ai-gemini</artifactId>
-            <version>1.1.0-rc1</version>
+            <version>${langchain4j.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-chroma</artifactId>
-            <version>1.1.0-beta7</version>
+            <version>1.2.0-beta8</version>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
-            <version>1.1.0-beta7</version>
+            <version>1.2.0-beta8</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

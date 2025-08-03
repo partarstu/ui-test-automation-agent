@@ -227,7 +227,7 @@ public class ElementLocator extends AbstractTools {
         var pageDescriptionPrompt = PageDescriptionPrompt.builder()
                 .withScreenshot(captureScreen())
                 .build();
-        try (var model = getVisionModel(false)) {
+        try (var model = getVisionModel()) {
             var pageDescriptionResult = model.generateAndGetResponseAsObject(pageDescriptionPrompt,
                     "generating the description of the page relative to the element");
             return pageDescriptionResult.pageDescription();
@@ -475,7 +475,7 @@ public class ElementLocator extends AbstractTools {
                     .withScreenshot(wholeScreenshot)
                     .build();
 
-            try (var executor = newVirtualThreadPerTaskExecutor(); var model = getVisionModel(true)) {
+            try (var executor = newVirtualThreadPerTaskExecutor(); var model = getVisionModel()) {
                 List<Callable<List<BoundingBox>>> tasks = range(0, VISUAL_GROUNDING_MODEL_VOTE_COUNT)
                         .mapToObj(i -> (Callable<List<BoundingBox>>) () -> model.generateAndGetResponseAsObject(elementBoundingBoxPrompt,
                                 "getting bounding boxes from vision model (vote #" + i + ")").boundingBoxes())
@@ -565,7 +565,7 @@ public class ElementLocator extends AbstractTools {
                 .withBoundingBoxColor(BOUNDING_BOX_COLOR)
                 .build();
 
-        try (var model = getVisionModel(false)) {
+        try (var model = getVisionModel()) {
             var uiElementDescriptionResult = model.generateAndGetResponseAsObject(prompt,
                     "generating the description of selected UI element");
             var describedUiElement = new UiElement(randomUUID(), uiElementDescriptionResult.name(),
@@ -646,7 +646,7 @@ public class ElementLocator extends AbstractTools {
             @NotNull BufferedImage resultingScreenshot,
             @NotNull Map<Color, Rectangle> boxesWithColors) {
         try (var executor = newVirtualThreadPerTaskExecutor();
-             var model = getVisionModel(false)) {
+             var model = getVisionModel()) {
             var validColors = boxesWithColors.keySet().stream().map(CommonUtils::getColorName).toList();
             var prompt = BestMatchingUiElementIdentificationPrompt.builder()
                     .withUiElement(uiElement)

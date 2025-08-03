@@ -35,6 +35,7 @@ public class ChatModelEventListener implements ChatModelListener {
         ChatResponse chatResponse = responseContext.chatResponse();
         AiMessage aiMessage = getAiMessage(chatResponse);
         log.debug("AI Message Text: {}", aiMessage.text());
+        log.debug("AI Message Thinking: {}", aiMessage.thinking());
         log.debug("AI Message tool execution requests: {}", aiMessage.toolExecutionRequests());
         ChatResponseMetadata metadata = chatResponse.metadata();
         if (metadata != null) {

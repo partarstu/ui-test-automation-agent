@@ -1,14 +1,18 @@
 # AI-Powered UI Test Automation Agent
 
-This project is a Java-based agent that leverages Generative AI models and Retrieval-Augmented Generation (RAG) to execute automated test
-cases at the graphical user interface (GUI) level. It understands explicit natural language test case instructions (both actions and
-verifications), performs corresponding actions using the mouse and keyboard, locates the required UI elements on the screen (if needed), and
-verifies whether actual results correspond to the expected ones using computer vision capabilities.
+This project is a Java-based agent that leverages Generative AI models and Retrieval-Augmented Generation (RAG) to execute test
+cases written in a natural language form at the graphical user interface (GUI) level. It understands explicit test case instructions
+(both actions and verifications), performs corresponding actions using its tools (like the mouse and keyboard), locates the required UI
+elements on the screen (if needed), and verifies whether actual results correspond to the expected ones using computer vision capabilities.
 
 [![Package Project](https://github.com/partarstu/ui-test-automation-agent/actions/workflows/package.yml/badge.svg)](https://github.com/partarstu/ui-test-automation-agent/actions/workflows/package.yml)
 
 Here the corresponding article on
 Medium: [AI Agent That’s Rethinking UI Test Automation](https://medium.com/@partarstu/meet-the-ai-agent-thats-rethinking-ui-test-automation-d8ef9742c6d5)
+
+This agent can be a part of any distributed testing framework which uses A2A protocol for communication between agents. An example of
+such a framework is [Agentic QA Framework](https://github.com/partarstu/agentic-qa-framework). This agent has been tested as
+a part of this framework for executing a sample test case inside Google Cloud.
 
 ## Key Features
 
@@ -16,9 +20,8 @@ Medium: [AI Agent That’s Rethinking UI Test Automation](https://medium.com/@pa
     * Utilizes the [LangChain4j](https://github.com/langchain4j/langchain4j) library to seamlessly interact with various Generative AI
       models.
     * Supports models from Google (via AI Studio or Vertex AI), Azure OpenAI, and Groq. Configuration is managed through `config.properties`
-      and
-      `AgentConfig.java`, allowing specification of providers, model names (`instruction.model.name`, `vision.model.name`), API keys/tokens,
-      endpoints, and generation parameters (temperature, topP, max output tokens, retries).
+      and `AgentConfig.java`, allowing specification of providers, model names (`instruction.model.name`, `vision.model.name`), API
+      keys/tokens, endpoints, and generation parameters (temperature, topP, max output tokens, retries).
     * Leverages separate models for instruction understanding (test case actions and verifications) and vision-based tasks like locating the
       best matching UI element, suggesting a new UI element's description, and verifying actual vs. expected results.
     * Uses structured prompts to guide model responses and ensure output can be parsed into required DTOs.
@@ -27,16 +30,14 @@ Medium: [AI Agent That’s Rethinking UI Test Automation](https://medium.com/@pa
 * **RAG:**
     * Employs a Retrieval-Augmented Generation (RAG) approach to manage information about UI elements.
     * Uses a vector database to store and retrieve UI element details (name, element description, anchor element descriptions, page summary,
-      and
-      screenshot). It currently supports only Chroma DB (`AgentConfig.getVectorDbProvider` -> `chroma`), configured via `vector.db.url` in
-      `config.properties`.
+      and screenshot). It currently supports only Chroma DB (`AgentConfig.getVectorDbProvider` -> `chroma`), configured via `vector.db.url`
+      in `config.properties`.
     * Stores UI element information as `UiElement` records, which include a name, self-description, description of surrounding
       elements (anchors), a page summary, and a screenshot (`UiElement.Screenshot`).
     * Retrieves the top N (`retriever.top.n` in config) most relevant UI elements based on semantic similarity between the query (derived
       from the test step action) and based on the stored element names. Minimum similarity scores (`element.retrieval.min.target.score`,
       `element.retrieval.min.general.score`, `element.retrieval.min.page.relevance.score` in config) are used to filter results for target
-      element identification and potential refinement
-      suggestions.
+      element identification and potential refinement suggestions.
 
 * **Computer Vision:**
     * Employs a hybrid approach combining large vision models with traditional computer vision algorithms (OpenCV's ORB and Template
@@ -261,9 +262,15 @@ override properties file settings.**
   be considered valid. Default: `0.8`.
 * `element.locator.found.matches.dimension.deviation.ratio` (Env: `FOUND_MATCHES_DIMENSION_DEVIATION_RATIO`): Maximum allowed deviation
   ratio for the dimensions of a found visual match compared to the original element. Default: `0.3`.
-* `element.locator.visual.grounding.model.vote.count` (Env: `VISUAL_GROUNDING_MODEL_VOTE_COUNT`): The number of times the visual grounding model is asked to identify potential locations of a UI element on the screen. A higher number can increase accuracy through consensus but also increases processing time and cost. Default: `5`.
-* `element.locator.validation.model.vote.count` (Env: `VALIDATION_MODEL_VOTE_COUNT`): The number of times the validation model is asked to confirm the best match from a set of candidates. This is used to create a quorum and improve the reliability of element identification. Default: `3`.
-* `element.locator.bbox.clustering.min.intersection.ratio` (Env: `BBOX_CLUSTERING_MIN_INTERSECTION_RATIO`): When using multiple votes from the visual grounding model, this value determines the minimum intersection-over-union (IoU) ratio for clustering bounding boxes. It controls how close bounding boxes need to be to be grouped into a single, averaged bounding box. Default: `0.7`.
+* `element.locator.visual.grounding.model.vote.count` (Env: `VISUAL_GROUNDING_MODEL_VOTE_COUNT`): The number of times the visual grounding
+  model is asked to identify potential locations of a UI element on the screen. A higher number can increase accuracy through consensus but
+  also increases processing time and cost. Default: `5`.
+* `element.locator.validation.model.vote.count` (Env: `VALIDATION_MODEL_VOTE_COUNT`): The number of times the validation model is asked to
+  confirm the best match from a set of candidates. This is used to create a quorum and improve the reliability of element identification.
+  Default: `3`.
+* `element.locator.bbox.clustering.min.intersection.ratio` (Env: `BBOX_CLUSTERING_MIN_INTERSECTION_RATIO`): When using multiple votes from
+  the visual grounding model, this value determines the minimum intersection-over-union (IoU) ratio for clustering bounding boxes. It
+  controls how close bounding boxes need to be to be grouped into a single, averaged bounding box. Default: `0.7`.
 * `dialog.default.horizontal.gap`, `dialog.default.vertical.gap`, `dialog.default.font.type`,
   `dialog.user.interaction.check.interval.millis`, `dialog.default.font.size`: Cosmetic and timing settings for interactive dialogs.
 
@@ -354,7 +361,7 @@ using the provided `cloudbuild_chroma.yaml` configuration.
 2. **Adapt the deployment script:**
    `deployment/cloud/deploy_gce.sh` script has some predefined values which need to be adapted, e.g. network name, exposed ports etc. if
    you want to use the agent as the part of already existing network (e.g. together
-   with [Agentic QA Framework](https://github.com/partarstu/agentic-qa-framework) ), you must carefully adapt all parameters to not 
+   with [Agentic QA Framework](https://github.com/partarstu/agentic-qa-framework) ), you must carefully adapt all parameters to not
    destroy any existing settings.
 3. **Execute the deployment script:**
    ```bash
@@ -377,7 +384,7 @@ using the provided `cloudbuild_chroma.yaml` configuration.
   the VM. This hostname can later be used for communication inside the network with other agents of the framework.
 * **noVNC Access:** You can access the agent's desktop environment via noVNC in your web browser. The URL will be
   `https://<EXTERNAL_IP>:<NO_VNC_PORT>`, where `<EXTERNAL_IP>` is the external IP of your GCE instance and `<NO_VNC_PORT>` is the noVNC
-  port (default `6901`). The VNC password is set via the `VNC_PW` secret. The SSL/TLS certificate is self-signed, so you'll have to 
+  port (default `6901`). The VNC password is set via the `VNC_PW` secret. The SSL/TLS certificate is self-signed, so you'll have to
   confirm visiting the page for the first time.
 
 ### Local Docker Deployment
@@ -418,7 +425,6 @@ The `build_and_run_docker.bat` script (for Windows) simplifies the process of bu
 * **Agent Server:** The agent's server will be accessible at `http://localhost:8005`.
 
 Remember to use the VNC password you set in the Dockerfile when prompted.
-
 
 ## Contributing
 

@@ -433,11 +433,11 @@ public class Agent {
     }
 
     private static GenAiModel getActionProcessingModel() {
-        return getInstructionModel(false);
+        return getInstructionModel();
     }
 
     private static GenAiModel getVerificationExecutionModel() {
-        return getVisionModel(false);
+        return getVisionModel();
     }
 
     private static Map<String, Tool> getToolsByName() {

@@ -188,7 +188,7 @@ public record UiAgentExecutor() implements AgentExecutor {
             return empty();
         }
 
-        try (var model = getInstructionModel(false)) {
+        try (var model = getInstructionModel()) {
             var prompt = TestCaseExtractionPrompt.builder()
                     .withUserRequest(message)
                     .build();
