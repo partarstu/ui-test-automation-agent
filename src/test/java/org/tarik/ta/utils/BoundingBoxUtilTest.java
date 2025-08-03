@@ -215,13 +215,10 @@ class BoundingBoxUtilTest {
     }
 
     @Test
-    @DisplayName("drawBoundingBox: Should draw rectangle without saving when saveResults is false")
+    @DisplayName("drawBoundingBox: Should draw rectangle without saving")
     void drawBoundingBoxWhenSaveIsFalseThenDrawOnly() {
-        // Given
-        boolean saveResults = false;
-
         // When
-        BoundingBoxInfo info = drawBoundingBox(mockImage, TEST_RECTANGLE, TEST_COLOR, saveResults);
+        BoundingBoxInfo info = drawBoundingBox(mockImage, TEST_RECTANGLE, TEST_COLOR);
 
         // Then
         verify(mockImage).createGraphics();
@@ -235,43 +232,10 @@ class BoundingBoxUtilTest {
     }
 
     @Test
-    @DisplayName("drawBoundingBox: Should draw rectangle and save when saveResults is true")
-    void drawBoundingBoxWhenSaveIsTrueThenDrawAndSave() {
-        // Given
-        boolean saveResults = true;
-        localDateTimeMockedStatic.when(LocalDateTime::now).thenReturn(DATE_TIME);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH_mm_ss");
-        String timestamp = DATE_TIME.format(formatter);
-        String expectedFileName = "%s_%s.png".formatted(timestamp, TEST_COLOR.toString().replaceAll("[^a-zA-Z0-9]", "_"));
-        pathsMockedStatic.when(() -> Paths.get(SCREENSHOTS_SAVE_FOLDER)).thenReturn(mockBasePath);
-        when(mockBasePath.resolve(eq(expectedFileName))).thenReturn(mockFinalPath);
-        when(mockFinalPath.toAbsolutePath()).thenReturn(mockFinalPath);
-        when(mockFinalPath.toFile()).thenReturn(mockFile);
-        imageIoMockedStatic.when(() -> ImageIO.write(mockImage, "png", mockFile)).thenReturn(true);
-
-        // When
-        BoundingBoxInfo info = drawBoundingBox(mockImage, TEST_RECTANGLE, TEST_COLOR, saveResults);
-
-        // Then
-        verify(mockImage).createGraphics();
-        verify(mockGraphics).setColor(TEST_COLOR);
-        verify(mockGraphics).setStroke(any(BasicStroke.class));
-        verify(mockGraphics).drawRect(TEST_RECTANGLE.x, TEST_RECTANGLE.y, TEST_RECTANGLE.width, TEST_RECTANGLE.height);
-        verify(mockGraphics).dispose();
-        localDateTimeMockedStatic.verify(LocalDateTime::now);
-        pathsMockedStatic.verify(() -> Paths.get(SCREENSHOTS_SAVE_FOLDER));
-        verify(mockBasePath).resolve(expectedFileName);
-        verify(mockFinalPath).toAbsolutePath();
-        verify(mockFinalPath).toFile();
-        imageIoMockedStatic.verify(() -> ImageIO.write(mockImage, "png", mockFile));
-        assertNotNull(info);
-    }
-
-    @Test
     @DisplayName("drawBoundingBox overload: Should call main drawBoundingBox with defaults")
     void drawBoundingBoxSimpleOverload() {
         // When
-        BoundingBoxInfo info = drawBoundingBox(mockImage, TEST_RECTANGLE, TEST_COLOR, false);
+        BoundingBoxInfo info = drawBoundingBox(mockImage, TEST_RECTANGLE, TEST_COLOR);
 
         // Then
         // Verify the main drawBoundingBox logic is invoked with expected defaults
@@ -288,7 +252,6 @@ class BoundingBoxUtilTest {
     @DisplayName("drawBoundingBoxes map overload: Should call drawBoundingBox for each entry")
     void drawBoundingBoxesMapOverload() {
         // Given
-        boolean saveResults = false;
         Color color1 = Color.BLUE;
         Rectangle rect1 = new Rectangle(20, 20, 50, 50);
         Color color2 = Color.GREEN;
@@ -296,7 +259,7 @@ class BoundingBoxUtilTest {
         Map<Color, Rectangle> rectanglesMap = Map.of(color1, rect1, color2, rect2);
 
         // When
-        drawBoundingBoxes(mockImage, rectanglesMap, saveResults);
+        drawBoundingBoxes(mockImage, rectanglesMap);
 
         // Then
         verify(mockImage, atLeastOnce()).createGraphics();

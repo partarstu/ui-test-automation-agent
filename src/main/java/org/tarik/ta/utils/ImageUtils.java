@@ -17,6 +17,8 @@ package org.tarik.ta.utils;
 
 import dev.langchain4j.data.image.Image;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -27,11 +29,21 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 
+import static java.nio.file.Files.createDirectories;
+import static java.time.LocalDateTime.now;
+import static java.time.format.DateTimeFormatter.ofPattern;
 import static javax.imageio.ImageIO.write;
 
+import org.tarik.ta.AgentConfig;
+
 public class ImageUtils {
+    private static final Logger LOG = LoggerFactory.getLogger(ImageUtils.class);
+
     public static Image getImage(String base64Image, String format) {
         return Image.builder()
                 .mimeType("image/" + format)
@@ -91,4 +103,48 @@ public class ImageUtils {
         WritableRaster raster = image.copyData(null);
         return new BufferedImage(cm, raster, isAlphaPremultiplied, null);
     }
+
+    public static BufferedImage padImage(BufferedImage source, int targetWidth, int targetHeight) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+        if (width >= targetWidth && height >= targetHeight) {
+            return source;
+        }
+
+        int newWidth = Math.max(width, targetWidth);
+        int newHeight = Math.max(height, targetHeight);
+        BufferedImage paddedImage = new BufferedImage(newWidth, newHeight, source.getType());
+        Graphics2D g = paddedImage.createGraphics();
+        g.setColor(Color.BLACK);
+        g.fillRect(0, 0, newWidth, newHeight);
+        g.drawImage(source, 0, 0, null);
+        g.dispose();
+
+        return paddedImage;
     }
+
+    public static boolean saveImage(BufferedImage resultingScreenshot, String postfix) {
+        LocalDateTime now = now();
+        DateTimeFormatter formatter = ofPattern("yyyy_MM_dd_HH_mm_ss");
+        String timestamp = now.format(formatter);
+        var filePath = Paths.get(AgentConfig.getScreenshotsSaveFolder())
+                .resolve("%s_%s.png".formatted(timestamp, postfix)).toAbsolutePath();
+        try {
+            createDirectories(filePath.getParent());
+            write(resultingScreenshot, "png", filePath.toFile() );
+            LOG.info("Saved image {}", filePath.toAbsolutePath());
+            return true;
+        } catch (IOException e) {
+            String message = "Couldn't save screenshot %s.".formatted(filePath);
+            LOG.error(message, e);
+            return false;
+        }
+    }
+
+    public static BufferedImage downscaleImage(BufferedImage source, double ratio) {
+        int newWidth = (int) (source.getWidth() * ratio);
+        int newHeight = (int) (source.getHeight() * ratio);
+        java.awt.Image scaledImage = source.getScaledInstance(newWidth, newHeight, java.awt.Image.SCALE_SMOOTH);
+        return toBufferedImage(scaledImage, newWidth, newHeight);
+    }
+}

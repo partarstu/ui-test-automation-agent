@@ -1,0 +1,17 @@
+steps:
+  # Build the Java application with Maven
+  - name: 'maven:3.9.11-eclipse-temurin-24'
+    dir: '/workspace'
+    args: [ 'mvn', 'clean', 'install', '-DskipTests', '-P', 'linux,server' ]
+
+  # Build the Docker image for GCE
+  - name: 'gcr.io/cloud-builders/docker'
+    dir: '/workspace'
+    args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/$_SERVICE_NAME:$_IMAGE_TAG', '-f', 'deployment/cloud/Dockerfile.cloudrun', '.' ]
+
+  # Push the Docker image to Google Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'push', 'gcr.io/$PROJECT_ID/$_SERVICE_NAME:$_IMAGE_TAG' ]
+
+images:
+  - 'gcr.io/$PROJECT_ID/$_SERVICE_NAME:$_IMAGE_TAG'

@@ -1,0 +1,25 @@
+# Deploys the Chroma DB service to Google Cloud Run.
+
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'beta'
+      - 'run'
+      - 'deploy'
+      - 'chromadb'
+      - '--image=chromadb/chroma:0.6.3'
+      - '--network=agent-network'
+      - '--subnet=agent-network'
+      - '--platform=managed'
+      - '--region=us-central1'
+      - '--allow-unauthenticated'
+      - '--min-instances=1'
+      - '--max-instances=1'
+      - '--port=$_PORT'
+      - '--add-volume=name=data,type=cloud-storage,bucket=$_CHROMA_BUCKET,mount-options=only-dir=$_CHROMA_DATA_PATH'
+      - '--add-volume-mount=volume=data,mount-path=/chroma/chroma'
+substitutions:
+  _CHROMA_BUCKET: ''
+  _CHROMA_DATA_PATH: 'chroma'
+  _PORT: '8000'

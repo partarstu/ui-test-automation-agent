@@ -19,7 +19,7 @@
     <properties>
         <jdk.version>24</jdk.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <langchain4j.version>1.0.0-beta3</langchain4j.version>
+        <langchain4j.version>1.2.0</langchain4j.version>
         <logback.version>1.5.18</logback.version>
         <junit.version>5.12.1</junit.version>
         <license.maven.plugin.version>5.0.0</license.maven.plugin.version>
@@ -29,22 +29,38 @@
         <maven.surefire.plugin.version>3.5.3</maven.surefire.plugin.version>
         <mockito.version>5.16.1</mockito.version>
         <slf4j.version>2.0.13</slf4j.version>
-        <javalin.version>6.6.0</javalin.version>
-        <jackson.version>2.18.3</jackson.version>
+        <javalin.version>6.7.0</javalin.version>
+        <jackson.version>2.19.1</jackson.version>
         <guava.version>33.4.8-jre</guava.version>
         <opencv.version>4.10.0-1.5.11</opencv.version>
         <openblas.version>0.3.28-1.5.11</openblas.version>
-        <main.class/>
+        <commons-math3.version>3.6.1</commons-math3.version>
+        <a2a.sdk.version>0.2.3.Beta1</a2a.sdk.version>
+        <main.class>org.tarik.ta.Server</main.class>
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-math3</artifactId>
+            <version>${commons-math3.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-spec</artifactId>
+            <version>${a2a.sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-server-common</artifactId>
+            <version>${a2a.sdk.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
-
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>opencv</artifactId>
@@ -57,7 +73,7 @@
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j</artifactId>
+            <artifactId>langchain4j-core</artifactId>
             <version>${langchain4j.version}</version>
         </dependency>
         <dependency>
@@ -67,8 +83,13 @@
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-vertex-ai-gemini</artifactId>
+            <artifactId>langchain4j-open-ai</artifactId>
             <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-vertex-ai-gemini</artifactId>
+            <version>1.2.0-beta8</version>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
@@ -78,12 +99,12 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-chroma</artifactId>
-            <version>${langchain4j.version}</version>
+            <version>1.2.0-beta8</version>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
-            <version>${langchain4j.version}</version>
+            <version>1.2.0-beta8</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -118,6 +139,16 @@
             <version>${jackson.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-jsonSchema</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>${guava.version}</version>
@@ -130,21 +161,6 @@
         </dependency>
     </dependencies>
     <profiles>
-        <profile>
-            <id>server</id>
-            <properties>
-                <main.class>org.tarik.ta.Server</main.class>
-            </properties>
-        </profile>
-        <profile>
-            <id>console</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <properties>
-                <main.class>org.tarik.ta.Agent</main.class>
-            </properties>
-        </profile>
         <profile>
             <id>windows</id>
             <activation>
@@ -190,10 +206,9 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven.surefire.plugin.version}</version>
                 <configuration>
-                    <argLine>
-                        -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar
-                        -Xshare:off
-                    </argLine>
+                    <excludes>
+                        <exclude>**/ManualTest.java</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>

@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.awt.*;
 
+import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.ERROR;
 import static org.tarik.ta.tools.AbstractTools.ToolExecutionStatus.SUCCESS;
 import static org.tarik.ta.utils.CommonUtils.getRobot;
 
@@ -36,6 +37,12 @@ public class AbstractTools {
     protected static ToolExecutionResult getSuccessfulResult(String message) {
         LOG.info(message);
         return new ToolExecutionResult(SUCCESS, message, false);
+    }
+
+    @NotNull
+    protected static ToolExecutionResult getFailedToolExecutionResult(String message, boolean retryMakesSense) {
+        LOG.error(message);
+        return new ToolExecutionResult(ERROR, message, retryMakesSense);
     }
 
     public record ToolExecutionResult(ToolExecutionStatus executionStatus, String message, boolean retryMakesSense) {

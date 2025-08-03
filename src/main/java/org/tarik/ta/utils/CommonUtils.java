@@ -15,12 +15,19 @@
  */
 package org.tarik.ta.utils;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.tarik.ta.dto.UiElementIdentificationResult;
+import org.tarik.ta.tools.ElementLocator;
 
 import javax.swing.*;
 import java.awt.*;
@@ -33,32 +40,46 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment;
+import static java.lang.Thread.currentThread;
 import static java.nio.file.Files.*;
 import static java.time.Instant.now;
 import static java.util.Comparator.comparingInt;
-import static java.util.Optional.empty;
-import static java.util.Optional.of;
+import static java.util.Optional.*;
 import static org.tarik.ta.utils.ImageUtils.toBufferedImage;
 
 public class CommonUtils {
     private static final Logger LOG = LoggerFactory.getLogger(CommonUtils.class);
     private static final Robot robot = getRobot();
-    protected static final Gson GSON = new Gson();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
 
     public static <T> Optional<T> deserializeJsonFromFile(String filePath, Class<T> clazz) {
         try (FileReader reader = new FileReader(filePath)) {
-            return of(GSON.fromJson(reader, clazz));
+            return of(OBJECT_MAPPER.readValue(reader, clazz));
+        } catch (JsonProcessingException e) {
+            var message = "Invalid JSON syntax in file: %s".formatted(filePath);
+            LOG.error(message, e);
+            return empty();
         } catch (IOException e) {
             var message = "Failed to read the contents of JSON file: %s".formatted(filePath);
             LOG.error(message, e);
             return empty();
-        } catch (JsonSyntaxException e) {
-            var message = "Invalid JSON syntax in file: %s".formatted(filePath);
-            LOG.error(message, e);
+        }
+    }
+
+    public static Optional<String> getObjectPrettyPrinted(ObjectMapper mapper, Map<String, String> toolExecutionInfoByToolName) {
+        try {
+            return of(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(toolExecutionInfoByToolName));
+        } catch (JsonProcessingException e) {
+            LOG.error("Couldn't write the provided tool execution info by tool name as a pretty string.", e);
             return empty();
         }
     }
@@ -244,5 +265,17 @@ public class CommonUtils {
         double uiScaleX = tx.getScaleX();
         double uiScaleY = tx.getScaleY();
         return new Point((int) (scaledScreenCoordinates.getX() * uiScaleX), (int) (scaledScreenCoordinates.getY() * uiScaleY));
+    }
+
+    public static <T> Optional<T> getFutureResult(Future<T> future, String resultDescription) {
+        try {
+            return ofNullable(future.get());
+        } catch (InterruptedException | ExecutionException e) {
+            LOG.warn("%s task failed".formatted(resultDescription), e);
+            if (e instanceof InterruptedException) {
+                currentThread().interrupt();
+            }
+            return empty();
+        }
     }
 }

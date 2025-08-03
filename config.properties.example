@@ -1,65 +1,163 @@
 # Basic agent configuration
+
+# Set to 'true' to run the agent without user interaction.
 unattended.mode=false
-port=7070
-test.mode=false
 
-#-----------------------------------------------
-# RAG config
-# Currently only 'chroma' is supported
-vector.db.provider=chroma
-vector.db.url=http://localhost:8000
-retriever.top.n=3
+# The port on which the agent server will listen.
+port=8005
 
-#-----------------------------------------------
-# Model Configuration
-model.provider=google
-instruction.model.name=gemini-2.0-flash
-vision.model.name=gemini-2.5-pro-exp-03-25
-model.max.output.tokens=5000
-model.temperature=0.0
-model.top.p=1.0
-# Max API request retries
-model.max.retries=10
+# The host address the agent server will bind to.
+host=localhost
 
-#-----------------------------------------------
-# Google API Configuration
-# Studio AI or Vertex AI
-google.api.provider=studio_ai
-google.api.token=YOUR_GOOGLE_AI_TOKEN_HERE
-google.project=YOUR_GOOGLE_PROJECT_ID
-google.location=YOUR_GOOGLE_PROJECT_LOCATION
+# Set to 'true' to enable debug mode for testing purposes.
+debug.mode=true
 
-#-----------------------------------------------
-# Azure OpenAI API Configuration
-azure.openai.api.key=YOUR_AZURE_OPEN_AI_API_KEY_HERE
-azure.openai.endpoint=YOUR_AZURE_OPEN_AI_ENDPOINT_HERE
+ #-----------------------------------------------
+ # RAG config
 
-#-----------------------------------------------
-# Timeout and Retry Configuration
-test.step.execution.retry.timeout.millis=10000
-test.step.execution.retry.interval.millis=1000
-verification.retry.timeout.millis=10000
-action.verification.delay.millis=1000
+ # The provider for the vector database. Currently, only 'chroma' is supported.
+ vector.db.provider=chroma
 
-#-----------------------------------------------
-# user UI dialog settings
-dialog.default.horizontal.gap=10
-dialog.default.vertical.gap=10
-dialog.default.font.type=Dialog
-dialog.user.interaction.check.interval.millis=100
-dialog.default.font.size=13
+ # The URL of the vector database.
+ vector.db.url=http://localhost:8020
 
-#-----------------------------------------------
-# Element Configuration
-element.bounding.box.color=green
-# this score is the minimum score which needs to be reached during target UI element retrieval based on its name
-element.retrieval.min.target.score=0.85
-# this score is the minimum score which needs to be reached during retrieval of all UI elements which are at least partially similar to
-# the target element name - they could be later modified by user in order to enhance the retrieval results next time
-element.retrieval.min.general.score=0.4
-# this score defines the threshold value of pattern match identification by OpenCV library, top visual matches which reach this score
-# will be passed to the model in order get the best one which matches the visual appearance and textual description
-element.locator.visual.similarity.threshold=0.8
-# the max amount of matches by OpenCV library which will be selected for each target UI element screenshot. Those matches will be
-# passed to the model in order get the best one which matches the visual appearance and textual description
-element.locator.top.visual.matches=3
+ # The number of top relevant results to retrieve from the vector database.
+ retriever.top.n=5
+
+ #-----------------------------------------------
+ # Model Configuration
+
+ # The AI model provider to use (e.g., google, openai, groq).
+ model.provider=google
+
+ # The name of the instruction model to use.
+ instruction.model.name=gemini-2.5-flash
+
+ # The name of the vision model to use.
+ vision.model.name=gemini-2.5-flash
+
+ # The maximum number of output tokens for the model.
+ model.max.output.tokens=5000
+
+ # The temperature for model generation (controls randomness).
+ model.temperature=0.0
+
+ # The top_p value for model generation (controls diversity).
+ model.top.p=1.0
+
+ # Max API request retries
+ model.max.retries=10
+
+ # Enable/disable model logging
+ model.logging.enabled=false
+
+ # Enable/disable thinking process output
+ thinking.output.enabled=true
+
+ # Budget for Gemini thinking process
+ gemini.thinking.budget=0
+
+ #-----------------------------------------------
+ # Google API Configuration
+
+ # The provider for Google API (e.g., studio_ai, vertex_ai).
+ google.api.provider=studio_ai
+
+ # Your Google AI token.
+ google.api.token=YOUR_GOOGLE_AI_TOKEN_HERE
+
+ # Your Google Cloud project ID.
+ google.project=YOUR_GOOGLE_PROJECT_ID
+
+ # Your Google Cloud project location.
+ google.location=YOUR_GOOGLE_PROJECT_LOCATION
+
+ #-----------------------------------------------
+ # Azure OpenAI API Configuration
+
+ # Your Azure OpenAI API key.
+ azure.openai.api.key=YOUR_AZURE_OPEN_AI_API_KEY_HERE
+
+ # Your Azure OpenAI endpoint.
+ azure.openai.endpoint=YOUR_AZURE_OPEN_AI_ENDPOINT_HERE
+
+ #-----------------------------------------------
+ # Groq API Configuration
+
+ # Your Groq API key.
+ groq.api.key=YOUR_GROQ_API_KEY_HERE
+
+ # Your Groq API endpoint.
+ groq.endpoint=YOUR_GROQ_ENDPOINT_HERE
+
+ #-----------------------------------------------
+ # Timeout and Retry Configuration
+
+ # Timeout in milliseconds for test step execution retries.
+ test.step.execution.retry.timeout.millis=5000
+
+ # Interval in milliseconds between test step execution retries.
+ test.step.execution.retry.interval.millis=1000
+
+ # Timeout in milliseconds for verification retries.
+ verification.retry.timeout.millis=5000
+
+ # Delay in milliseconds before performing action verification.
+ action.verification.delay.millis=500
+
+ #-----------------------------------------------
+ # user UI dialog settings
+
+ # Default horizontal gap for UI dialogs.
+ dialog.default.horizontal.gap=10
+
+ # Default vertical gap for UI dialogs.
+ dialog.default.vertical.gap=10
+
+ # Default font type for UI dialogs.
+ dialog.default.font.type=Dialog
+
+ # Interval in milliseconds to check for user interaction in dialogs.
+ dialog.user.interaction.check.interval.millis=50
+
+ # Default font size for UI dialogs.
+ dialog.default.font.size=13
+
+ #-----------------------------------------------
+ # Element Configuration
+
+ # The color used for drawing bounding boxes around UI elements.
+ element.bounding.box.color=green
+
+ # this score is the minimum score which needs to be reached during target UI element retrieval based on its name
+ element.retrieval.min.target.score=0.8
+
+ # this score is the minimum score which needs to be reached during retrieval of all UI elements which are at least partially similar to
+ # the target element name - they could be later modified by user in order to enhance the retrieval results next time
+ element.retrieval.min.general.score=0.5
+
+ # this score is the minimum score which needs to be reached during retrieval of all UI elements which are at least partially similar to
+ # the target element name - they could be later modified by user in order to enhance the retrieval results next time
+ element.retrieval.min.page.relevance.score=0.5
+
+ # this score defines the threshold value of pattern match identification by OpenCV library, top visual matches which reach this score
+ # will be passed to the model in order get the best one which matches the visual appearance and textual description
+ element.locator.visual.similarity.threshold=0.8
+
+ # the max amount of matches by OpenCV library which will be selected for each target UI element screenshot. Those matches will be
+ # passed to the model in order get the best one which matches the visual appearance and textual description
+ element.locator.top.visual.matches=6
+
+ # The minimum intersection area ratio for a visual match to be considered valid.
+ # This parameter helps filter out false positives where the detected bounding box
+ # only partially overlaps with the expected element. A value of 0.8 means that
+ # at least 80% of the detected bounding box must overlap with the expected element's
+ # area to be considered a valid match.
+ element.locator.min.intersection.area.ratio=0.8
+
+ # The maximum allowed deviation ratio for the dimensions (width and height) of a found visual match compared to the original element's dimensions.
+ # This parameter is used in the ORB (Oriented FAST and Rotated BRIEF) feature detection algorithm to filter out potential matches that are significantly
+ # different in size from the element being searched for. A value of 0.3 means that a found match can be at most 30% larger than the original element
+ # in either width or height to be considered a valid match. This helps in improving the accuracy of visual searches by eliminating scale-invariant
+ # matches that are not contextually appropriate.
+ element.locator.found.matches.dimension.deviation.ratio=0.3

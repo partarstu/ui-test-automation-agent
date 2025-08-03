@@ -15,7 +15,16 @@
  */
 package org.tarik.ta.helper_entities;
 
+import org.tarik.ta.annotations.JsonClassDescription;
+import org.tarik.ta.annotations.JsonFieldDescription;
 import java.util.List;
 
-public record TestStep(String stepDescription, List<String> testData, String expectedResults) {
+@JsonClassDescription("A single test step in a test case")
+public record TestStep(
+        @JsonFieldDescription("A natural language description of the action to perform in this step.")
+        String stepDescription,
+        @JsonFieldDescription("A test data to be used as input for the step. Can be empty.")
+        List<String> testData,
+        @JsonFieldDescription("The expected outcome or state of the application after the step is executed. This is used for verification.")
+        String expectedResults) {
 }

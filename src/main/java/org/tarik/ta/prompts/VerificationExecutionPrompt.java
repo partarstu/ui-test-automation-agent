@@ -29,6 +29,7 @@ import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 public class VerificationExecutionPrompt extends StructuredResponsePrompt<VerificationExecutionResult> {
     private static final String SYSTEM_PROMPT_FILE_NAME = "verification_execution_prompt.txt";
     private static final String VERIFICATION_DESCRIPTION_PLACEHOLDER = "verification_description";
+    private static final String ACTION_DESCRIPTION_PLACEHOLDER = "action_description";
     private final BufferedImage screenshot;
 
     private VerificationExecutionPrompt(@NotNull Map<String, String> systemMessagePlaceholders,
@@ -49,7 +50,13 @@ public class VerificationExecutionPrompt extends StructuredResponsePrompt<Verifi
 
     @Override
     protected String getUserMessageTemplate() {
-        return "Verify that {{%s}}, using the following screenshot:\n".formatted(VERIFICATION_DESCRIPTION_PLACEHOLDER);
+        return ("""
+                Verify that {{%s}}.
+                
+                The test case action executed before this verification: {{%s}}.
+                
+                The screenshot of the application under test:
+                """).formatted(VERIFICATION_DESCRIPTION_PLACEHOLDER, ACTION_DESCRIPTION_PLACEHOLDER);
     }
 
     @Override
@@ -65,10 +72,16 @@ public class VerificationExecutionPrompt extends StructuredResponsePrompt<Verifi
 
     public static class Builder {
         private String verificationDescription;
+        private String actionDescription;
         private BufferedImage screenshot;
 
         public Builder withVerificationDescription(@NotNull String verificationDescription) {
             this.verificationDescription = verificationDescription;
+            return this;
+        }
+
+        public Builder withActionDescription(@NotNull String actionDescription) {
+            this.actionDescription = actionDescription;
             return this;
         }
 
@@ -79,7 +92,12 @@ public class VerificationExecutionPrompt extends StructuredResponsePrompt<Verifi
 
         public VerificationExecutionPrompt build() {
             checkArgument(isNotBlank(verificationDescription), "Verification description must be set");
-            return new VerificationExecutionPrompt(Map.of(), Map.of(VERIFICATION_DESCRIPTION_PLACEHOLDER, verificationDescription),
+            checkArgument(isNotBlank(actionDescription), "Action description must be set");
+            return new VerificationExecutionPrompt(
+                    Map.of(),
+                    Map.of(
+                            VERIFICATION_DESCRIPTION_PLACEHOLDER, verificationDescription,
+                            ACTION_DESCRIPTION_PLACEHOLDER, actionDescription),
                     screenshot);
         }
     }

@@ -20,60 +20,35 @@ import org.bytedeco.opencv.opencv_java;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.nio.file.Paths;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 
 import static java.util.stream.Stream.concat;
-import static javax.imageio.ImageIO.write;
+import static org.tarik.ta.utils.BoundingBoxUtil.OpenCvInitializer.initialize;
 
 
 public class BoundingBoxUtil {
-    private static final String SCREENSHOTS_SAVE_FOLDER = "screens";
-
-    public static void drawBoundingBoxes(BufferedImage image, Map<Color, Rectangle> rectangleByLabel,
-                                         boolean saveResults) {
-        OpenCvInitializer.initialize();
-        rectangleByLabel.forEach((boxColor, box) -> drawBoundingBox(image, box, boxColor, saveResults));
+    public static void drawBoundingBoxes(BufferedImage image, Map<Color, Rectangle> rectangleByLabel) {
+        initialize();
+        rectangleByLabel.forEach((boxColor, box) -> drawBoundingBox(image, box, boxColor));
     }
 
-    public static BoundingBoxInfo drawBoundingBox(BufferedImage image, Rectangle rectangle, Color boxColor, boolean saveResults) {
-        OpenCvInitializer.initialize();
+    public static BoundingBoxInfo drawBoundingBox(BufferedImage image, Rectangle rectangle, Color boxColor) {
+        initialize();
         Graphics2D g2d = image.createGraphics();
         try {
             int boundingBoxLineStroke = 4;
             g2d.setColor(boxColor);
             g2d.setStroke(new BasicStroke(boundingBoxLineStroke));
             g2d.drawRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-
-            if (saveResults) {
-                LocalDateTime now = LocalDateTime.now();
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH_mm_ss");
-                String timestamp = now.format(formatter);
-                var filePath = Paths.get(SCREENSHOTS_SAVE_FOLDER)
-                        .resolve("%s_%s.png".formatted(timestamp, boxColor.toString().replaceAll("[^a-zA-Z0-9]", "_"))).toAbsolutePath();
-                try {
-                    write(image, "png", filePath.toFile());
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            return new BoundingBoxInfo(null);
+            return new BoundingBoxInfo(boxColor);
         } finally {
             g2d.dispose();
         }
     }
 
-    public static void drawBoundingBox(BufferedImage image, Rectangle boundingBox, Color boxColor) {
-        OpenCvInitializer.initialize();
-        drawBoundingBox(image, boundingBox, boxColor, false);
-    }
-
     public static List<Rectangle> mergeOverlappingRectangles(Collection<Rectangle> rectangles) {
-        OpenCvInitializer.initialize();
+        initialize();
         List<Rectangle> results = new LinkedList<>();
         List<Rectangle> uniqueRectangles = new LinkedList<>();
         List<Rectangle> mergedRectangles = new LinkedList<>();
@@ -100,6 +75,17 @@ public class BoundingBoxUtil {
         }
 
         return concat(finalResults.stream(), uniqueRectangles.stream()).distinct().toList();
+    }
+
+    public static double calculateIoU(Rectangle r1, Rectangle r2) {
+        initialize();
+        Rectangle intersection = r1.intersection(r2);
+        if (intersection.isEmpty()) {
+            return 0.0;
+        }
+        double intersectionArea = intersection.getWidth() * intersection.getHeight();
+        double unionArea = (r1.getWidth() * r1.getHeight()) + (r2.getWidth() * r2.getHeight()) - intersectionArea;
+        return unionArea == 0 ? 0 : intersectionArea / unionArea;
     }
 
     public record BoundingBoxInfo(Color boxColor) {

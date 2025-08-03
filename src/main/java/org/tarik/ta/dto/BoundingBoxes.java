@@ -13,13 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.tarik.ta.exceptions;
+package org.tarik.ta.dto;
 
-import org.tarik.ta.dto.VerificationExecutionResult;
+import org.tarik.ta.annotations.JsonClassDescription;
+import org.tarik.ta.annotations.JsonFieldDescription;
 
-public class VerificationExecutionException extends RuntimeException {
-    public VerificationExecutionException(String verification, VerificationExecutionResult verificationExecutionResult) {
-        super("Verifying that %s failed. %s. Interrupting test case execution."
-                .formatted(verification, verificationExecutionResult.message()));
-    }
+import java.awt.*;
+import java.util.List;
+
+@JsonClassDescription("the list of all identified bounding boxes")
+public record BoundingBoxes(
+        @JsonFieldDescription("contains all identified by you bounding boxes.") List<BoundingBox> boundingBoxes
+) {
 }

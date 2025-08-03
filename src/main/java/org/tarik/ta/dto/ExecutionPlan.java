@@ -13,13 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.tarik.ta.exceptions;
+package org.tarik.ta.dto;
 
-import org.tarik.ta.helper_entities.ActionExecutionResult;
+import org.tarik.ta.annotations.JsonClassDescription;
+import org.tarik.ta.annotations.JsonFieldDescription;
 
-public class ActionExecutionException extends RuntimeException {
-    public ActionExecutionException(String action, ActionExecutionResult actionExecutionResult) {
-        super("Failure while executing '%s'. Root cause: %s. Interrupting test case execution."
-                .formatted(action, actionExecutionResult.message()));
-    }
+
+import java.util.List;
+
+@JsonClassDescription("the final result of your task")
+public record ExecutionPlan(
+        @JsonFieldDescription("contains all identified by you action execution plans.")
+        List<ActionExecutionPlan> actionExecutionPlans
+) {
 }

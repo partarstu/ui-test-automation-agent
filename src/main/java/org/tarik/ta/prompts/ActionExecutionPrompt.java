@@ -44,7 +44,7 @@ public class ActionExecutionPrompt extends AbstractPrompt {
 
     @Override
     protected String getUserMessageTemplate() {
-        return "The action is: {{%s}}".formatted(ACTION_DESCRIPTION_PLACEHOLDER);
+        return "The action is: {{%s}}\nThe screenshot is:\n".formatted(ACTION_DESCRIPTION_PLACEHOLDER);
     }
 
     @Override

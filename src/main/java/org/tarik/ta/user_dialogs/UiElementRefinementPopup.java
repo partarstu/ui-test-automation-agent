@@ -28,11 +28,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static java.awt.Image.SCALE_AREA_AVERAGING;
 import static java.util.stream.IntStream.range;
+import static org.tarik.ta.utils.CommonUtils.isNotBlank;
 
 public class UiElementRefinementPopup extends AbstractDialog {
     private static final String DIALOG_TITLE = "UI Elements Refinement";
@@ -49,20 +50,19 @@ public class UiElementRefinementPopup extends AbstractDialog {
     private static final int ELEMENT_DESCRIPTION_LENGTH = 550;
 
     private final Map<UiElement, Integer> availableElements = new LinkedHashMap<>();
-    private final BiFunction<UiElement, String, UiElement> elementUpdater;
-    private final BiConsumer<UiElement, String> elementRemover;
+    private final Function<UiElement, UiElement> elementUpdater;
+    private final Consumer<UiElement> elementRemover;
     private final JPanel elementPanel;
-    private final String elementDescription;
 
     private final ExecutorService elementActionExecutor = Executors.newCachedThreadPool();
 
-    private UiElementRefinementPopup(String message, List<UiElement> itemsToRefine, String targetElementDescription,
-                                     BiFunction<UiElement, String, UiElement> elementUpdater,
-                                     BiConsumer<UiElement, String> elementRemover) {
+    private UiElementRefinementPopup(String message,
+                                     List<UiElement> itemsToRefine,
+                                     Function<UiElement, UiElement> elementUpdater,
+                                     Consumer<UiElement> elementRemover) {
         super(DIALOG_TITLE);
         this.elementUpdater = elementUpdater;
         this.elementRemover = elementRemover;
-        this.elementDescription = targetElementDescription;
         range(0, itemsToRefine.size()).forEach(index -> availableElements.put(itemsToRefine.get(index), index));
 
         JPanel mainPanel = getDefaultMainPanel();
@@ -85,7 +85,7 @@ public class UiElementRefinementPopup extends AbstractDialog {
         displayPopup();
     }
 
-    private void showElementActionDialog(UiElement element, String elementDescription) {
+    private void showElementActionDialog(UiElement element) {
         JDialog dialog = new JDialog(this, ELEMENT_ACTION_DIALOG_TITLE, true);
         dialog.setLayout(new FlowLayout());
         JButton updateButton = new JButton(UPDATE_BUTTON_TEXT);
@@ -94,7 +94,7 @@ public class UiElementRefinementPopup extends AbstractDialog {
         updateButton.addActionListener(_ -> {
             dialog.dispose();
             elementActionExecutor.submit(() -> {
-                var updatedElement = elementUpdater.apply(element, elementDescription);
+                var updatedElement = elementUpdater.apply(element);
                 var position = availableElements.remove(element);
                 availableElements.put(updatedElement, position);
                 refreshElementPanel();
@@ -104,7 +104,7 @@ public class UiElementRefinementPopup extends AbstractDialog {
         deleteButton.addActionListener(_ -> {
             dialog.dispose();
             elementActionExecutor.submit(() -> {
-                elementRemover.accept(element, elementDescription);
+                elementRemover.accept(element);
                 availableElements.remove(element);
                 refreshElementPanel();
             });
@@ -129,7 +129,7 @@ public class UiElementRefinementPopup extends AbstractDialog {
                     elementLabel.addMouseListener(new MouseAdapter() {
                         @Override
                         public void mouseClicked(MouseEvent e) {
-                            showElementActionDialog(element, elementDescription);
+                            showElementActionDialog(element);
                         }
                     });
                     elementLabel.setBorder(new MatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
@@ -143,8 +143,10 @@ public class UiElementRefinementPopup extends AbstractDialog {
 
     @NotNull
     private JLabel getElementLabel(UiElement element) {
-        String labelText = String.format(ELEMENT_LABEL_FORMAT, ELEMENT_DESCRIPTION_LENGTH, ELEMENT_DESCRIPTION_FONT_SIZE, element.name(),
-                 element.ownDescription());
+        var elementFullName =
+                isNotBlank(element.pageSummary()) ? "%s belonging to %s".formatted(element.name(), element.pageSummary()) : element.name();
+        String labelText = String.format(ELEMENT_LABEL_FORMAT, ELEMENT_DESCRIPTION_LENGTH, ELEMENT_DESCRIPTION_FONT_SIZE, elementFullName,
+                element.ownDescription());
         JLabel label = new JLabel(labelText);
         label.setIcon(getImageIcon(element));
         label.setHorizontalTextPosition(SwingConstants.RIGHT);
@@ -166,10 +168,9 @@ public class UiElementRefinementPopup extends AbstractDialog {
 
     public static void display(@NotNull String message,
                                @NotNull List<UiElement> elementsToRefine,
-                               @NotNull String targetElementDescription,
-                               @NotNull BiFunction<UiElement, String, UiElement> elementUpdater,
-                               @NotNull BiConsumer<UiElement, String> elementRemover) {
-        var popup = new UiElementRefinementPopup(message, elementsToRefine, targetElementDescription, elementUpdater, elementRemover);
+                               @NotNull Function<UiElement, UiElement> elementUpdater,
+                               @NotNull Consumer<UiElement> elementRemover) {
+        var popup = new UiElementRefinementPopup(message, elementsToRefine, elementUpdater, elementRemover);
         waitForUserInteractions(popup);
     }
 
