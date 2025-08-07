@@ -360,18 +360,18 @@ using the provided `cloudbuild_chroma.yaml` configuration.
    cd <project_root_directory>
    ```
 2. **Adapt the deployment script:**
-   `deployment/cloud/deploy_gce.sh` script has some predefined values which need to be adapted, e.g. network name, exposed ports etc. if
+   `deployment/cloud/deploy_vm.sh` script has some predefined values which need to be adapted, e.g. network name, exposed ports etc. if
    you want to use the agent as the part of already existing network (e.g. together
    with [Agentic QA Framework](https://github.com/partarstu/agentic-qa-framework) ), you must carefully adapt all parameters to not
    destroy any existing settings.
 3. **Execute the deployment script:**
    ```bash
-   ./deployment/cloud/deploy_gce.sh
+   ./deployment/cloud/deploy_vm.sh
    ```
    This script will:
     * Enable necessary GCP services.
     * Build the agent application using Maven.
-    * Build the Docker image for the agent using `deployment/cloud/Dockerfile.cloudrun` and push it to Google Container Registry.
+    * Build the Docker image for the agent using `deployment/cloud/Dockerfile.cloud` and push it to Google Container Registry.
     * Set up VPC network and firewall rules (if they don't exist).
     * Create a GCE Spot VM instance
     * Start the agent container inside created VM using a corresponding startup script.

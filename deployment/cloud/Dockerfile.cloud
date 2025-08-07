@@ -44,6 +44,11 @@ RUN openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/ssl/novnc/novnc.key -
 COPY ${SOURCE_START_WEBSOCKIFY_SSL_SCRIPT} ${DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT}
 RUN chmod +x ${DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT}
 
+# --- Chromium Configuration ---
+# Configure Chromium flags for headless operation
+RUN echo 'CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-dev-shm-usage"' >> /home/headless/.chromium-browser.init
+RUN chown -R headless:headless /home/headless
+
 # --- Application Setup ---
 # Copy your Java application JAR file into the container.
 # We'll place it in the app directory.
@@ -54,9 +59,6 @@ RUN chmod 777 -R ${APP_LOG_DIR}
 # This script will be executed after the main VNC and desktop services are running.
 COPY ${SOURCE_START_SCRIPT} ${DESTINATION_START_SCRIPT}
 RUN chmod 777 ${DESTINATION_START_SCRIPT}
-
-COPY ${SOURCE_START_WEBSOCKIFY_SSL_SCRIPT} ${DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT}
-RUN chmod 777 ${DESTINATION_START_WEBSOCKIFY_SSL_SCRIPT}
 
 # --- Environment Variables ---
 ENV APP_JAR_PATH=${DESTINATION_JAR_PATH}

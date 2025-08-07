@@ -1,0 +1,23 @@
+steps:
+  - name: 'maven:3.9.11-eclipse-temurin-24'
+    dir: '/workspace'
+    args: [ 'mvn', 'clean', 'install', '-DskipTests', '-P', 'linux,server' ]
+
+  - name: 'gcr.io/cloud-builders/docker'
+    dir: '/workspace'
+    args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/$_SERVICE_NAME:$_IMAGE_TAG', '-f', 'deployment/cloud/Dockerfile.cloud', '.' ]
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'push', 'gcr.io/$PROJECT_ID/$_SERVICE_NAME:$_IMAGE_TAG' ]
+
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args: [ '-c', 'deployment/cloud/deploy_vm.sh' ]
+    dir: '/workspace'
+    env:
+      - 'SERVICE_NAME=$_SERVICE_NAME'
+      - 'IMAGE_TAG=$_IMAGE_TAG'
+
+substitutions:
+  _SERVICE_NAME: 'ui-test-automation-agent'
+  _IMAGE_TAG: 'latest'

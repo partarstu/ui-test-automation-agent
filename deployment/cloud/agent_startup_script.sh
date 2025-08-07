@@ -75,6 +75,6 @@ docker run -d --rm --name ${SERVICE_NAME} --shm-size=4g \
     -e INSTRUCTION_MODEL_PROVIDER="${INSTRUCTION_MODEL_PROVIDER}" \
     -e UNATTENDED_MODE="${UNATTENDED_MODE}" \
     -e DEBUG_MODE="${DEBUG_MODE}" \
-    gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG} ${JAVA_APP_STARTUP_SCRIPT}
+    gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG} su -c "DISPLAY=:1 ${JAVA_APP_STARTUP_SCRIPT}" headless
 
 echo "Container '${SERVICE_NAME}' is starting."
