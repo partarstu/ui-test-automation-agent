@@ -20,7 +20,6 @@ import dev.langchain4j.agent.tool.Tool;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.tarik.ta.utils.CommonUtils;
 
 import java.awt.*;
 import java.net.URI;
@@ -37,6 +36,7 @@ public class CommonTools extends AbstractTools {
     private static final String HTTP_PROTOCOL = "http://";
     private static final String OS_NAME_SYS_PROPERTY = "os.name";
     private static final String HTTPS_PROTOCOL = "https://";
+    private static Process browserProcess;
 
     @Tool(value = "Waits the specified amount of seconds. Use this tool when you need to wait after some action.")
     public static ToolExecutionResult waitSeconds(@P(value = "The specific amount of seconds to wait.") String secondsAmount) {
@@ -50,12 +50,14 @@ public class CommonTools extends AbstractTools {
     }
 
     @Tool(value = "Opens the default browser with the specified URL. Use this tool to navigate to a web page.")
-    public static ToolExecutionResult openBrowser(@P(value = "The URL to open in the browser.") String url) {
+    public static synchronized ToolExecutionResult openBrowser(@P(value = "The URL to open in the browser.") String url) {
         if (isBlank(url)) {
             return getFailedToolExecutionResult("URL must be provided", true);
         }
 
         try {
+            closeBrowser(); // Close any existing browser instance
+
             if (!url.toLowerCase().startsWith(HTTP_PROTOCOL) && !url.toLowerCase().startsWith(HTTPS_PROTOCOL)) {
                 LOG.warn("Provided URL '{}' doesn't have the protocol defined, using HTTP as the default one", url);
                 url = HTTP_PROTOCOL + url;
@@ -69,23 +71,12 @@ public class CommonTools extends AbstractTools {
                     return getFailedToolExecutionResult("The type of the current OS can't be identified using '%s' system property, " +
                             "can't proceed without it. and URL is blank", true);
                 }
-                ProcessBuilder processBuilder = new ProcessBuilder();
-                if (os.contains("win")) {
-                    processBuilder.command("cmd.exe", "/c", "start", url);
-                } else if (os.contains("mac")) {
-                    processBuilder.command("open", url);
-                } else {
-                    String browserCommand = System.getenv("BROWSER_COMMAND");
-                    if (browserCommand == null || browserCommand.trim().isEmpty()) {
-                        browserCommand = "chromium-browser";
-                    }
-                    processBuilder.command(browserCommand, "--no-sandbox", "--start-maximized", url);
-                }
-                LOG.debug("Executing command: {}", processBuilder.command());
-                Process process = processBuilder.start();
-                if (!process.isAlive()) {
+                String[] command = buildBrowserStartupCommand(os, url);
+                LOG.debug("Executing command: {}", String.join(" ", command));
+                browserProcess = new ProcessBuilder(command).start();
+                if (!browserProcess.isAlive()) {
                     var errorMessage = "Failed to open browser. Error: %s\n"
-                            .formatted(IOUtils.toString(process.getErrorStream(), UTF_8));
+                            .formatted(IOUtils.toString(browserProcess.getErrorStream(), UTF_8));
                     return getFailedToolExecutionResult(errorMessage, false);
                 }
             }
@@ -93,6 +84,36 @@ public class CommonTools extends AbstractTools {
             return getSuccessfulResult("Successfully opened default browser with URL: " + url);
         } catch (Exception e) {
             return getFailedToolExecutionResult("Failed to open default browser: " + e.getMessage(), false);
+        }
+    }
+
+    @Tool(value = "Closes the currently open browser instance. Use this tool when you need to close the browser.")
+    public static synchronized ToolExecutionResult closeBrowser() {
+        if (browserProcess != null && browserProcess.isAlive()) {
+            browserProcess.destroy();
+            try {
+                browserProcess.waitFor(); // Wait for the process to terminate
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return getFailedToolExecutionResult("Failed to close browser: " + e.getMessage(), false);
+            }
+            return getSuccessfulResult("Browser closed successfully.");
+        } else {
+            return getSuccessfulResult("No active browser process to close.");
+        }
+    }
+
+    private static String[] buildBrowserStartupCommand(String os, String url) {
+        if (os.contains("win")) {
+            return new String[]{"cmd.exe", "/c", "start", url};
+        } else if (os.contains("mac")) {
+            return new String[]{"open", url};
+        } else {
+            String browserCommand = System.getenv("BROWSER_COMMAND");
+            if (browserCommand == null || browserCommand.trim().isEmpty()) {
+                browserCommand = "chromium-browser";
+            }
+            return new String[]{browserCommand, "--no-sandbox", "--start-maximized", url};
         }
     }
 }

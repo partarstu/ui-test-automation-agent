@@ -43,7 +43,8 @@ public class AgentConfig {
     public enum ModelProvider {
         GOOGLE,
         OPENAI,
-        GROQ
+        GROQ,
+        ANTHROPIC
     }
 
     public enum GoogleApiProvider {
@@ -132,6 +133,10 @@ public class AgentConfig {
     // Groq API Config
     private static final ConfigProperty<String> GROQ_API_KEY = getRequiredProperty("groq.api.key", "GROQ_API_KEY", true);
     private static final ConfigProperty<String> GROQ_API_ENDPOINT = getRequiredProperty("groq.endpoint", "GROQ_ENDPOINT", false);
+
+    // Anthropic API Config
+    private static final ConfigProperty<String> ANTHROPIC_API_KEY = getRequiredProperty("anthropic.api.key", "ANTHROPIC_API_KEY", true);
+    private static final ConfigProperty<String> ANTHROPIC_API_ENDPOINT = getRequiredProperty("anthropic.endpoint", "ANTHROPIC_ENDPOINT", false);
 
     // Timeout and Retry Config
     private static final ConfigProperty<Integer> TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS =
@@ -265,6 +270,16 @@ public class AgentConfig {
 
     public static String getGroqEndpoint() {
         return GROQ_API_ENDPOINT.value();
+    }
+
+    // -----------------------------------------------------
+    // Anthropic API Config
+    public static String getAnthropicApiKey() {
+        return ANTHROPIC_API_KEY.value();
+    }
+
+    public static String getAnthropicEndpoint() {
+        return ANTHROPIC_API_ENDPOINT.value();
     }
 
     // -----------------------------------------------------

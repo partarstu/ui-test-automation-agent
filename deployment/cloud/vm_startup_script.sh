@@ -38,11 +38,15 @@ GROQ_API_KEY_SECRET="projects/${PROJECT_ID}/secrets/GROQ_API_KEY/versions/latest
 GROQ_ENDPOINT_SECRET="projects/${PROJECT_ID}/secrets/GROQ_ENDPOINT/versions/latest"
 VECTOR_DB_URL_SECRET="projects/${PROJECT_ID}/secrets/VECTOR_DB_URL/versions/latest"
 VNC_PW_SECRET="projects/${PROJECT_ID}/secrets/VNC_PW/versions/latest"
+ANTHROPIC_API_KEY_SECRET="projects/${PROJECT_ID}/secrets/ANTHROPIC_API_KEY/versions/latest"
+ANTHROPIC_ENDPOINT_SECRET="projects/${PROJECT_ID}/secrets/ANTHROPIC_ENDPOINT/versions/latest"
 
 GROQ_API_KEY=$(docker run --rm google/cloud-sdk:latest gcloud secrets versions access latest --secret="GROQ_API_KEY" --project="${PROJECT_ID}")
 GROQ_ENDPOINT=$(docker run --rm google/cloud-sdk:latest gcloud secrets versions access latest --secret="GROQ_ENDPOINT" --project="${PROJECT_ID}")
 VECTOR_DB_URL=$(docker run --rm google/cloud-sdk:latest gcloud secrets versions access latest --secret="VECTOR_DB_URL" --project="${PROJECT_ID}")
 VNC_PW=$(docker run --rm google/cloud-sdk:latest gcloud secrets versions access latest --secret="VNC_PW" --project="${PROJECT_ID}")
+ANTHROPIC_API_KEY=$(docker run --rm google/cloud-sdk:latest gcloud secrets versions access latest --secret="ANTHROPIC_API_KEY" --project="${PROJECT_ID}")
+ANTHROPIC_ENDPOINT=$(docker run --rm google/cloud-sdk:latest gcloud secrets versions access latest --secret="ANTHROPIC_ENDPOINT" --project="${PROJECT_ID}")
 
 # --- Creating Log Directory on Host ---
 echo "Creating log directory on the host..."
@@ -75,6 +79,8 @@ docker run -d --rm --name ${SERVICE_NAME} --shm-size=4g \
     -e INSTRUCTION_MODEL_PROVIDER="${INSTRUCTION_MODEL_PROVIDER}" \
     -e UNATTENDED_MODE="${UNATTENDED_MODE}" \
     -e DEBUG_MODE="${DEBUG_MODE}" \
+    -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+    -e ANTHROPIC_ENDPOINT="${ANTHROPIC_ENDPOINT}" \
     gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG} su -c "DISPLAY=:1 ${JAVA_APP_STARTUP_SCRIPT}" headless
 
 echo "Container '${SERVICE_NAME}' is starting."

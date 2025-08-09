@@ -20,13 +20,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.Content;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.jetbrains.annotations.NotNull;
 import org.tarik.ta.dto.ExecutionPlan;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Optional.ofNullable;
 
 public class ActionExecutionPlanPrompt extends StructuredResponsePrompt<ExecutionPlan> {
     private static final String SYSTEM_PROMPT_TEMPLATE_FILE = "action_execution_plan_prompt.txt";
@@ -87,8 +91,9 @@ public class ActionExecutionPlanPrompt extends StructuredResponsePrompt<Executio
             checkArgument(!toolSpecifications.isEmpty(), "At least one tool should be provided");
             checkArgument(!actions.isEmpty(), "At least one action should be provided");
             var toolInfos = toolSpecifications.stream()
-                    .map(toolSpec->
-                            new ToolInfo(toolSpec.name(), toolSpec.description(), toolSpec.parameters().properties().toString()))
+                    .filter(Objects::nonNull)
+                    .map(toolSpec -> new ToolInfo(toolSpec.name(), toolSpec.description(),
+                            ofNullable(toolSpec.parameters()).map(JsonObjectSchema::properties).map(Object::toString).orElse("")))
                     .toList();
             try {
                 Map<String, String> userMessagePlaceholders = Map.of(
@@ -108,4 +113,3 @@ public class ActionExecutionPlanPrompt extends StructuredResponsePrompt<Executio
         }
     }
 }
-

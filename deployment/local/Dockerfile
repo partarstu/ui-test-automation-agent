@@ -6,8 +6,8 @@ ARG APP_DIR=/app
 ARG APP_LOG_DIR=${APP_DIR}/log
 ARG SOURCE_JAR_PATH=target/ui_test_java-1.0.0-SNAPSHOT.jar
 ARG DESTINATION_JAR_PATH=${APP_DIR}/app.jar
-ARG SOURCE_START_SCRIPT=deployment/java_app_startup.sh
-ARG DESTINATION_START_SCRIPT=${APP_DIR}/java_app_startup.sh
+ARG SOURCE_START_SCRIPT=deployment/agent_startup.sh
+ARG DESTINATION_START_SCRIPT=${APP_DIR}/agent_startup.sh
 ARG JAVA_VERSION=24
 
 # Switch to root user to install software
@@ -54,3 +54,5 @@ ENV SCREENSHOTS_SAVE_FOLDER="${APP_DIR}/screenshots"
 ENV LOG_DIR=${APP_LOG_DIR}
 ENV DEBUG_MODE="true"
 ENV DEPLOYMENT_ENV="local"
+ENV ANTHROPIC_API_KEY=""
+ENV ANTHROPIC_ENDPOINT="https://api.anthropic.com"

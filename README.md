@@ -19,7 +19,7 @@ a part of this framework for executing a sample test case inside Google Cloud.
 * **AI Model Integration:**
     * Utilizes the [LangChain4j](https://github.com/langchain4j/langchain4j) library to seamlessly interact with various Generative AI
       models.
-    * Supports models from Google (via AI Studio or Vertex AI), Azure OpenAI, and Groq. Configuration is managed through `config.properties`
+    * Supports models from Google (via AI Studio or Vertex AI), Azure OpenAI, Groq and Anthropic. Configuration is managed through `config.properties`
       and `AgentConfig.java`, allowing specification of providers, model names (`instruction.model.name`, `vision.model.name`), API
       keys/tokens, endpoints, and generation parameters (temperature, topP, max output tokens, retries).
     * Leverages separate models for instruction understanding (test case actions and verifications) and vision-based tasks like locating the
@@ -218,8 +218,8 @@ override properties file settings.**
 * `vector.db.url` (Env: `VECTOR_DB_URL`): Required URL for the vector database connection. Default: `http://localhost:8020`.
 * `retriever.top.n` (Env: `RETRIEVER_TOP_N`): Number of top similar elements to retrieve from the vector DB based on semantic element name
   similarity. Default: `5`.
-* `instruction.model.provider` (Env: `INSTRUCTION_MODEL_PROVIDER`): AI model provider for instruction model (`google`, `openai`, or `groq`). Default: `google`.
-* `vision.model.provider` (Env: `VISION_MODEL_PROVIDER`): AI model provider for vision model (`google`, `openai`, or `groq`). Default: `google`.
+* `instruction.model.provider` (Env: `INSTRUCTION_MODEL_PROVIDER`): AI model provider for instruction model (`google`, `openai`, `groq`, or `anthropic`). Default: `google`.
+* `vision.model.provider` (Env: `VISION_MODEL_PROVIDER`): AI model provider for vision model (`google`, `openai`, `groq`, or `anthropic`). Default: `google`.
 * `instruction.model.name` (Env: `INSTRUCTION_MODEL_NAME`): Name/deployment ID of the model for processing test case actions and
   verifications. Default: `gemini-2.5-flash`.
 * `vision.model.name` (Env: `VISION_MODEL_NAME`): Name/deployment ID of the vision-capable model. Default: `gemini-2.5-flash`.
@@ -238,6 +238,8 @@ override properties file settings.**
 * `azure.openai.endpoint` (Env: `OPENAI_API_ENDPOINT`): Endpoint URL for Azure OpenAI. Required if using OpenAI.
 * `groq.api.key` (Env: `GROQ_API_KEY`): API Key for Groq. Required if using Groq.
 * `groq.endpoint` (Env: `GROQ_ENDPOINT`): Endpoint URL for Groq. Required if using Groq.
+* `anthropic.api.key` (Env: `ANTHROPIC_API_KEY`): API Key for Anthropic. Required if using Anthropic.
+* `anthropic.endpoint` (Env: `ANTHROPIC_ENDPOINT`): Endpoint URL for Anthropic. Required if using Anthropic.
 * `test.step.execution.retry.timeout.millis` (Env: `TEST_STEP_EXECUTION_RETRY_TIMEOUT_MILLIS`): Timeout for retrying failed test case
   actions. Default: `5000 ms`.
 * `test.step.execution.retry.interval.millis` (Env: `TEST_STEP_EXECUTION_RETRY_INTERVAL_MILLIS`): Delay between test case action retries.
