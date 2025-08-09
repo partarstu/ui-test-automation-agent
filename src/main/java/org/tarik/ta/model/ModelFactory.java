@@ -22,7 +22,6 @@ import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.vertexai.gemini.VertexAiGeminiChatModel;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
-import org.tarik.ta.AgentConfig;
 
 import java.util.List;
 
@@ -109,7 +108,6 @@ public class ModelFactory {
     private static ChatModel getGroqModel(String modelName) {
         return OpenAiChatModel.builder()
                 .baseUrl(getGroqEndpoint())
-                .apiKey("gsk_...")
                 .modelName(modelName)
                 .maxRetries(MAX_RETRIES)
                 .apiKey(getGroqApiKey())

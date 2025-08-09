@@ -141,7 +141,7 @@ public class ImageUtils {
         }
     }
 
-    public static BufferedImage downscaleImage(BufferedImage source, double ratio) {
+    public static BufferedImage scaleImage(BufferedImage source, double ratio) {
         int newWidth = (int) (source.getWidth() * ratio);
         int newHeight = (int) (source.getHeight() * ratio);
         java.awt.Image scaledImage = source.getScaledInstance(newWidth, newHeight, java.awt.Image.SCALE_SMOOTH);
